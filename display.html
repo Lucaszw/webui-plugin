@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+
+<html>
+	<head>
+        <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+		<link rel="stylesheet" type="text/css" media="screen" href="formatPlane.css" />
+        <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.0.0/jquery.slim.min.js"></script>
+		<script type="text/javascript" src = "https://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.8.3/underscore-min.js"></script>
+		<script type = "text/javascript" src = "https://cdnjs.cloudflare.com/ajax/libs/numeric/1.2.6/numeric.min.js"></script>
+		<script type = "text/javascript" src = "https://cdnjs.cloudflare.com/ajax/libs/backbone.js/1.3.3/backbone-min.js"></script>
+		<script type = "text/javascript" src = "https://cdnjs.cloudflare.com/ajax/libs/three.js/r73/three.js"></script>
+		<script type = "text/javascript" src = "https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.17/d3.min.js"></script>
+  		<script type = "text/javascript" src="https://rawgit.com/JozzOfLyfe/d3-plugin-controlPoints/master/d3.controlPoints.js"></script>
+		<script type = "text/javascript" src = "planeTransform.js"></script>
+	</head>
+
+	<body>
+        <div id="container">
+            <canvas id="canvasID"></canvas>
+            <svg id="controlHandles"></svg>
+        </div>
+
+        <script id="vertex_shader" type="x-shader/x-vertex">
+            varying vec4 textureCoord;
+            attribute float diagonalRatio;
+            void main() {
+                textureCoord = vec4(uv.xy, 0.0, 1.0);
+                textureCoord.w = diagonalRatio;
+                textureCoord.xy *= textureCoord.w;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+        </script>
+
+        <script id="fragment_shader" type="x-shader/x-fragment">
+            uniform sampler2D uSampler;
+            varying vec4 textureCoord;
+            void main() {
+                gl_FragColor = texture2D(uSampler, textureCoord.xy / textureCoord.w);
+            }
+        </script>
+		
+	    <script type='text/javascript'>
+            $(window).on("load", function () {
+                var threePlane = new planeTransform();
+                this.tp = threePlane;
+                threePlane.listen();
+            });
+	    </script>
+	</body>
+</html>
+		
+
+	
