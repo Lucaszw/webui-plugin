@@ -11,6 +11,8 @@
 		<script type = "text/javascript" src = "https://cdnjs.cloudflare.com/ajax/libs/three.js/r73/three.js"></script>
 		<script type = "text/javascript" src = "https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.17/d3.min.js"></script>
   		<script type = "text/javascript" src="https://rawgit.com/JozzOfLyfe/d3-plugin-controlPoints/master/d3.controlPoints.js"></script>
+        
+        <script type = "text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.5/dat.gui.min.js"></script>
 		<script type = "text/javascript" src = "planeTransform.js"></script>
 	</head>
 
@@ -35,17 +37,30 @@
             uniform sampler2D uSampler;
             varying vec4 textureCoord;
             void main() {
-                gl_FragColor = texture2D(uSampler, textureCoord.xy / textureCoord.w);
+                gl_FragColor = texture2D(uSampler, textureCoord.xy/textureCoord.w);
             }
         </script>
 		
 	    <script type='text/javascript'>
+            
             $(window).on("load", function () {
                 var threePlane = new planeTransform();
                 this.tp = threePlane;
+                         
+                var gui = new dat.GUI();
+                var menu = gui;
+                menu.add(threePlane, 'speed', 1, 250);
+                menu.add(threePlane, 'displayHandles');
+                menu.add(threePlane, 'rotateRight');
+                menu.add(threePlane, 'rotateLeft');
+                menu.add(threePlane, 'flipHorizontal');
+                menu.add(threePlane, 'flipVertical');
+
+                
                 threePlane.listen();
             });
-	    </script>
+            
+        </script>
 	</body>
 </html>
 		
