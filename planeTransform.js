@@ -1,6 +1,9 @@
 class planeTransform{
 
     constructor(){
+        //datgui is messing up the camera to world space action
+        //if two points are the same, the texture disappears
+        //plane jumps to other side
         this.frame = 0;
         this.displayHandles = true;
         this.updatePos = true;
@@ -67,8 +70,8 @@ class planeTransform{
 
         //add video texture
         this.videoTexture = new THREE.Texture( this.video );
-        this.videoTexture.minFilter = THREE.LinearFilter;
-        this.videoTexture.magFilter = THREE.LinearFilter;
+        this.videoTexture.minFilter = THREE.NearestFilter;
+        this.videoTexture.magFilter = THREE.NearestFilter;
 
         var customUniforms = {
             uSampler: {
@@ -96,16 +99,17 @@ class planeTransform{
         this.scene.add(this.mesh);
         this.renderer = new THREE.WebGLRenderer({
             canvas: canvas
-        });''
+        });
         document.body.appendChild(this.renderer.domElement);
         this.renderer.render(this.scene, this.camera);
         
-        var diagonalRatios = this.calculateDiagonalRatios();
-        for (var i = 0; i < 4; i++) {
-            this.geometry.attributes.diagonalRatio.array[i] = diagonalRatios[i];
-        }
         
-        //this.pointsUI.on("changed", function(d){this.onControlPointChange (d, this)});
+        var diagonalRatios = this.calculateDiagonalRatios();
+        if(diagonalRatios){
+            for (var i = 0; i < 4; i++) {
+                this.geometry.attributes.diagonalRatio.array[i] = diagonalRatios[i];
+            }
+        }
         this.pointsUI.on("changed", (d)=>this.onControlPointChange(d));
     }
     
@@ -148,8 +152,10 @@ class planeTransform{
         
         //new diagonal ratios
         var diagonalRatios = this.calculateDiagonalRatios();
-        for (var i = 0; i < 4; i++) {
-            this.geometry.attributes.diagonalRatio.array[i] = diagonalRatios[i];
+        if(diagonalRatios){
+            for (var i = 0; i < 4; i++) {
+                this.geometry.attributes.diagonalRatio.array[i] = diagonalRatios[i];
+            }
         }
 
     }
@@ -208,10 +214,14 @@ class planeTransform{
 
         var intx = (tr[1] - tl[1] - (slope1*tr[0] - slope2*tl[0]))/(slope2 - slope1);
         var inty = slope1*(intx - tr[0]) + tr[1];
+        
         var dis1 = this.calculateDistance(intx, inty, tr[0], tr[1]);
         var dis2 = this.calculateDistance(intx, inty, br[0], br[1]);
         var dis3 = this.calculateDistance(intx, inty, tl[0], tl[1]);
         var dis4 = this.calculateDistance(intx, inty, bl[0], bl[1]);
+        
+        if(!(dis1 && dis2 && dis3 && dis4))
+            return false;
 
         return [(dis2 + dis3)/dis2, (dis1 + dis4)/dis4, (dis1 + dis4)/dis1, (dis2 + dis3)/dis3];
     }
