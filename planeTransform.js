@@ -1,19 +1,22 @@
 class planeTransform{
 
     constructor(){
-        this.init();
         this.frame = 0;
-        this.speed = 250;
-        this.displayHandles = false;
+        this.displayHandles = true;
+        this.updatePos = true;
+        document.addEventListener("keydown", (event)=>this.onDocumentKeyDown(event), false);
+        document.addEventListener("keyup", (event)=>this.onDocumentKeyUp(event), false);
+        
+        this.init();
     }
 
     init(){
-        var mesh, customMaterial;
         /* global variables
-        var camera, scene, renderer, geometry;
-        var video, videoTexture;
-        var controlPoints;*/
+         var camera, scene, renderer, geometry, prevPos, updatePos;
+         var video, videoTexture;
+         var controlPoints, pointsUI;*/
 
+        var mesh, customMaterial;
         var width = window.innerWidth;
         var height = window.innerHeight;
         this.sceneWidth = width;
@@ -39,16 +42,16 @@ class planeTransform{
         $("#controlHandles").width(width);
         $("#controlHandles").height(height);
         
+        this.pointsUI = d3.controlPointsUI()(d3.select('#controlHandles')
+                                            .selectAll('circle')
+                                            .data(this.controlPoints)).radius(10);
         
-        var pointsUI = d3.controlPointsUI()(d3.select('#controlHandles')
-                                      .selectAll('circle')
-                                      .data(this.controlPoints)).radius(10);
         this.scene = new THREE.Scene();
         this.camera = new THREE.PerspectiveCamera(50, width/height, 1, 10000);
         this.camera.position.z = this.sceneWidth;
         this.scene.add(this.camera);
 
-        //laptop camera
+        //webcam detection
         this.video = document.createElement("video");
         var video = this.video;
         var hasUserMedia = navigator.webkitGetUserMedia ? true : false;
@@ -59,14 +62,10 @@ class planeTransform{
         });
           
         if(!this.video.src){
-            this.video.crossOrigin = "anonymous";
-            this.video.src =
-            //"https://media.w3.org/2010/05/sintel/trailer.ogv"
-            "http://avideos.5min.com//415/5177415/517741401_4.mp4#t=20";
-            this.video.load();
-            this.video.play();
+            console.log("no data from webcam");
         }
 
+        //add video texture
         this.videoTexture = new THREE.Texture( this.video );
         this.videoTexture.minFilter = THREE.LinearFilter;
         this.videoTexture.magFilter = THREE.LinearFilter;
@@ -85,7 +84,7 @@ class planeTransform{
             side: THREE.DoubleSide
         });
 
-        //draw the plane
+        //draw the plane and add diagonal ratios
         this.geometry = new THREE.PlaneBufferGeometry(width, height, 1, 1);
         var diagonalRatios = new Float32Array(4);
         for (var i = 0; i < 4; i++) {
@@ -94,11 +93,65 @@ class planeTransform{
         this.geometry.addAttribute('diagonalRatio', new THREE.BufferAttribute(diagonalRatios, 1));
 
         this.mesh = new THREE.Mesh(this.geometry, customMaterial);
-        this.scene.add(this.mesh)
+        this.scene.add(this.mesh);
         this.renderer = new THREE.WebGLRenderer({
             canvas: canvas
-        });
+        });''
         document.body.appendChild(this.renderer.domElement);
+        this.renderer.render(this.scene, this.camera);
+        
+        var diagonalRatios = this.calculateDiagonalRatios();
+        for (var i = 0; i < 4; i++) {
+            this.geometry.attributes.diagonalRatio.array[i] = diagonalRatios[i];
+        }
+        
+        //this.pointsUI.on("changed", function(d){this.onControlPointChange (d, this)});
+        this.pointsUI.on("changed", (d)=>this.onControlPointChange(d));
+    }
+    
+    onControlPointChange(d){
+        //d consists of points x, y and index
+        var pos = [];
+        var vectorSet = [];
+        
+        
+        //canvas space to camera space
+        for (var i = 0; i < this.controlPoints.length; i++) {
+            vectorSet[i] = new THREE.Vector3((this.controlPoints[i].x / this.sceneWidth) * 2 - 1,
+                                             -(this.controlPoints[i].y / this.sceneHeight) * 2 + 1, 0.5);
+            vectorSet[i].unproject(this.camera);
+            var dir = vectorSet[i].sub(this.camera.position).normalize();
+            var distance = -this.camera.position.z / dir.z;
+            pos[i] = this.camera.position.clone().add(dir.multiplyScalar(distance));
+        }
+        
+        var posArray = [];
+        
+        //turn pos (THREE.vector array) into a array
+        for(var i = 0; i < pos.length; i++){
+            posArray.push(pos[i].x);
+            posArray.push(pos[i].y);
+        }
+        
+        if(!this.prevPos)
+            this.prevPos = $.extend(true, [], posArray);
+        var transform = PerspT(posArray, this.prevPos).coeffsInv;
+        this.prevPos = $.extend(true, [], posArray);
+        
+        var geoPos = this.geometry.attributes.position.array;
+        if(this.updatePos){
+            [geoPos[3], geoPos[4]]  = this.getUpdatedPos(geoPos[3], geoPos[4], transform);
+            [geoPos[9], geoPos[10]] = this.getUpdatedPos(geoPos[9], geoPos[10], transform);
+            [geoPos[6], geoPos[7]] = this.getUpdatedPos(geoPos[6], geoPos[7], transform);
+            [geoPos[0], geoPos[1]] = this.getUpdatedPos(geoPos[0], geoPos[1], transform);
+        }
+        
+        //new diagonal ratios
+        var diagonalRatios = this.calculateDiagonalRatios();
+        for (var i = 0; i < 4; i++) {
+            this.geometry.attributes.diagonalRatio.array[i] = diagonalRatios[i];
+        }
+
     }
 
     listen() {
@@ -111,47 +164,31 @@ class planeTransform{
             $("#controlHandles").hide();
             
         this.frame += 1;
-        if (this.frame > this.speed && this.speed != 250){
-            this.rotateRight();
-            this.frame = 0;
-        }
         this.render();
+        
     }
 
     render() {
         if( this.video.readyState === this.video.HAVE_ENOUGH_DATA ){
             this.videoTexture.needsUpdate = true;
         }
-
-        var vectorSet = [];
-        var pos = [];
-        //transform canvas space to camera space
-        for (var i = 0; i < this.controlPoints.length; i++) {
-            vectorSet[i] = new THREE.Vector3((this.controlPoints[i].x / this.sceneWidth) * 2 - 1,
-                 -(this.controlPoints[i].y / this.sceneHeight) * 2 + 1, 0.5);
-            vectorSet[i].unproject(this.camera);
-            var dir = vectorSet[i].sub(this.camera.position).normalize();
-            var distance = -this.camera.position.z / dir.z;
-            pos[i] = this.camera.position.clone().add(dir.multiplyScalar(distance));
-        }
-
-        this.geometry.attributes.position.array[3] = pos[0].x;
-        this.geometry.attributes.position.array[4] = pos[0].y;
-        this.geometry.attributes.position.array[9] = pos[1].x;
-        this.geometry.attributes.position.array[10] = pos[1].y;
-        this.geometry.attributes.position.array[6] = pos[2].x;
-        this.geometry.attributes.position.array[7] = pos[2].y;
-        this.geometry.attributes.position.array[0] = pos[3].x;
-        this.geometry.attributes.position.array[1] = pos[3].y;
         this.geometry.attributes.position.needsUpdate = true;
-
-        var diagonalRatios = this.calculateDiagonalRatios();
-        for (var i = 0; i < 4; i++) {
-            this.geometry.attributes.diagonalRatio.array[i] = diagonalRatios[i];
-        }
         this.geometry.attributes.diagonalRatio.needsUpdate = true;
-
         this.renderer.render(this.scene, this.camera);
+    }
+                    
+    onDocumentKeyDown(event){
+        var keyCode = event.which;
+        if(keyCode == 16){
+            this.updatePos = false;
+        }
+    }
+    
+    onDocumentKeyUp(event){
+        var keyCode = event.which;
+        if(keyCode == 16){
+            this.updatePos = true;
+        }
     }
 
     calculateDiagonalRatios(){
@@ -183,28 +220,39 @@ class planeTransform{
         return Math.sqrt((x1 - x2)*(x1 - x2) + (y1 - y2)*(y1 - y2));
     }
     
+    getUpdatedPos(x, y, M){
+        var W = x*M[6] + y*M[7] + M[8];
+        var X = x*M[0]/W + y*M[1]/W + M[2]/W;
+        var Y = x*M[3]/W + y*M[4]/W + M[5]/W;
+        return [X, Y];
+    }
+    
     rotateLeft(){
         this.controlPoints.unshift(this.controlPoints.pop());
+        this.onControlPointChange(null);
     }
     
     rotateRight(){
         this.controlPoints.push(this.controlPoints.shift());
+        this.onControlPointChange(null);
     }
     
     flipHorizontal(){
-        //1234-> 2143
-        this.rotateLeft();
-        var temp = this.controlPoints[1];
-        this.controlPoints[1] = this.controlPoints[3];
-        this.controlPoints[3] = temp;
-    }
-    
-    flipVertical(){
         //1234-> 4321
         this.rotateRight();
         var temp = this.controlPoints[1];
         this.controlPoints[1] = this.controlPoints[3];
         this.controlPoints[3] = temp;
+        this.onControlPointChange(null);
+    }
+    
+    flipVertical(){
+        //1234-> 2143
+        this.rotateLeft();
+        var temp = this.controlPoints[1];
+        this.controlPoints[1] = this.controlPoints[3];
+        this.controlPoints[3] = temp;
+        this.onControlPointChange(null);
     }
 }
   
