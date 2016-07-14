@@ -22,31 +22,12 @@
             <svg id="controlHandles"></svg>
         </div>
 
-        <script id="vertex_shader" type="x-shader/x-vertex">
-            varying vec4 textureCoord;
-            attribute float diagonalRatio;
-            void main() {
-                textureCoord = vec4(uv.xy, 0.0, 1.0);
-                textureCoord.w = diagonalRatio;
-                textureCoord.xy *= textureCoord.w;
-                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-            }
-        </script>
-
-        <script id="fragment_shader" type="x-shader/x-fragment">
-            uniform sampler2D uSampler;
-            varying vec4 textureCoord;
-            void main() {
-                gl_FragColor = texture2D(uSampler, textureCoord.xy/textureCoord.w);
-            }
-        </script>
-		
 	    <script type='text/javascript'>
-            
             $(window).on("load", function () {
-                var threePlane = new planeTransform();
+                var threePlane = new planeTransform($("#canvasID")[0],
+                                                    $("#controlHandles")[0]);
                 this.tp = threePlane;
-                         
+
                 var gui = new dat.GUI();
                 var menu = gui;
                 menu.add(threePlane, 'displayHandles');
@@ -55,10 +36,8 @@
                 menu.add(threePlane, 'flipHorizontal');
                 menu.add(threePlane, 'flipVertical');
 
-                
                 threePlane.listen();
             });
-            
         </script>
 	</body>
 </html>
