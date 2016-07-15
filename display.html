@@ -1,32 +1,105 @@
 <!DOCTYPE html>
 
 <html>
-	<head>
+    <head>
         <meta http-equiv="content-type" content="text/html; charset=UTF-8">
-		<link rel="stylesheet" type="text/css" media="screen" href="formatPlane.css" />
-        <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.0.0/jquery.slim.min.js"></script>
-		<script type="text/javascript" src = "https://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.8.3/underscore-min.js"></script>
-		<script type = "text/javascript" src = "https://cdnjs.cloudflare.com/ajax/libs/numeric/1.2.6/numeric.min.js"></script>
-		<script type = "text/javascript" src = "https://cdnjs.cloudflare.com/ajax/libs/backbone.js/1.3.3/backbone-min.js"></script>
-		<script type = "text/javascript" src = "https://cdnjs.cloudflare.com/ajax/libs/three.js/r73/three.js"></script>
-		<script type = "text/javascript" src = "https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.17/d3.min.js"></script>
-  		<script type = "text/javascript" src="https://rawgit.com/JozzOfLyfe/d3-plugin-controlPoints/master/d3.controlPoints.js"></script>
-        <script type = "text/javascript" src="https://rawgit.com/jlouthan/perspective-transform/master/dist/perspective-transform.js"></script>
-        <script type = "text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.5/dat.gui.min.js"></script>
-		<script type = "text/javascript" src = "planeTransform.js"></script>
-	</head>
+        <link rel="stylesheet" type="text/css" media="screen" href="formatPlane.css" />
+        <script type="text/javascript" src="jquery.slim.min.js"></script>
+        <script type="text/javascript" src="underscore-min.js"></script>
+        <script type="text/javascript" src="numeric.min.js"></script>
+        <script type="text/javascript" src="backbone-min.js"></script>
+        <script type="text/javascript" src="three.min.js"></script>
+        <script type="text/javascript" src="d3.min.js"></script>
+        <script type="text/javascript" src="d3.controlPoints.js"></script>
+        <script type="text/javascript" src="perspective-transform.js"></script>
+        <script type="text/javascript" src="dat.gui.min.js"></script>
+        <script type="text/javascript" src="planeTransform.js"></script>
+        <script type="text/javascript" src="stats.js"></script>
+        <script type="text/javascript" src="d3-threeD.js"></script>
+        <script type="text/javascript" src="OrbitControls.js"></script>
+        <script type="text/javascript" src="two.min.js"></script>
+        <script type="text/javascript" src="svg-injector.min.js"></script>
+        <script type="text/javascript" src="ThreeHelpers.MouseEventHandler.js"></script>
+        <script type="text/javascript" src="ThreeHelpers.SvgPathsGroup.js"></script>
+    </head>
 
-	<body>
+    <body>
         <div id="container">
+            <div id="Stats-output"></div>
             <canvas id="canvasID"></canvas>
             <svg id="controlHandles"></svg>
         </div>
+        <div id="device" style="display:none">
+        <!-- Use "inject-me" class to replace "<img>" tag with "<svg>" element. -->
+        <img id="device-image" class="inject-me" data-src="device.svg">
+        </div>
 
-	    <script type='text/javascript'>
-            $(window).on("load", function () {
+        <script type='text/javascript'>
+            var stats;
+            var orbit;
+            var gl_element = $("#canvasID");
+
+            function invertColor(shape) {
+                var color_i = new THREE.Color(shape.object.material.color);
+                shape.object.material.color.setRGB(1. - color_i.r,
+                                                   1. - color_i.g,
+                                                   1. - color_i.b);
+            }
+
+            function initStats() {
+                stats = new Stats();
+                stats.setMode(0); // 0: fps, 1: ms
+
+                // Align top-left
+                stats.domElement.style.position = 'absolute';
+                stats.domElement.style.left = '0px';
+                stats.domElement.style.top = '0px';
+
+                document.getElementById("Stats-output").appendChild(stats
+                                                                    .domElement);
+
+                return stats;
+            }
+
+            function init(svgGroup) {
+                stats = initStats();
                 var threePlane = new planeTransform($("#canvasID")[0],
                                                     $("#controlHandles")[0]);
                 this.tp = threePlane;
+
+                // Create orbit controls to zoom, pan, etc.  Start at center of SVG
+                // drawing.
+                orbit = new THREE.OrbitControls(this.tp.camera,
+                                                this.tp.renderer.domElement);
+                orbit.position0.set(svgGroup.center.x, svgGroup.center.y, 65);
+                orbit.target0 = svgGroup.center;
+                orbit.reset();
+                orbit.enableRotate = false;
+
+                // Get list of meshes corresponding to fill of SVG `<path>` elements.
+                var shapeMeshes = svgGroup.shapesGroup.children.map(
+                    function (shape_i) { return shape_i.children[0]; });
+
+                // Add it to the scene.
+                this.tp.scene.add(svgGroup.shapesGroup);
+
+                // Create event manager to translate mouse movement and presses
+                // high-level shape events.
+                mouseHandler = (new ThreeHelpers
+                                .MouseEventHandler({element: gl_element,
+                                                    shapes: shapeMeshes,
+                                                    camera: threePlane.camera}));
+                mouseHandler.on("mouseover", function (x, y, shape)
+                                { invertColor(shape); });
+                mouseHandler.on("mouseout", function (x, y, shape)
+                                { invertColor(shape); });
+                mouseHandler.on("clicked", function (x, y, shapes_i) {
+                    // Invert opacity of shape when it is clicked.
+                    shapes_i.map(function (shape_i) {
+                        var opacity_i = shape_i.object.material.opacity;
+                        shape_i.object.material.opacity = 1 - opacity_i;
+                    });
+                });
 
                 var gui = new dat.GUI();
                 var menu = gui;
@@ -37,10 +110,42 @@
                 menu.add(threePlane, 'flipVertical');
 
                 threePlane.listen();
+
+                var position = threePlane.geometry.attributes.position.array;
+                var bbox = svgGroup.bounding_box;
+
+                position[0] = bbox.left;
+                position[1] = bbox.bottom;
+                position[3] = bbox.right;
+                position[4] = bbox.bottom;
+                position[6] = bbox.left;
+                position[7] = bbox.top;
+                position[9] = bbox.right;
+                position[10] = bbox.top;
+            }
+
+            $(window).on("load", function () {
+                /* Inject `<img src="*.svg">` tag as `<svg ...>` element. */
+
+                svgGroup = new ThreeHelpers.SvgGroup($("#device-image"));
+                // After `<svg>` tag is injected, call `init()` function.
+                svgGroup.on("loaded", function (svg, shapesGroup_i) {
+                    // Set opacity and transparency of each shape.
+                    shapesGroup_i.traverse(function (shape_i) {
+                        if (shape_i.material) {
+                            shape_i.material.opacity = 0.3;
+                            shape_i.material.transparent = true;
+                        }
+                    });
+                    init(svgGroup);
+                });
+                // Start injection.  The "loaded" event will be triggered when
+                // injection is complete.
+                svgGroup.load();
             });
         </script>
-	</body>
+    </body>
 </html>
-		
+        
 
-	
+    

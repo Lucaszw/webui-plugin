@@ -60,18 +60,37 @@ class planeTransform{
         this.video = document.createElement("video");
         var video = this.video;
         var hasUserMedia = navigator.webkitGetUserMedia ? true : false;
-        navigator.webkitGetUserMedia({video:true}, function(stream){
-            video.src = webkitURL.createObjectURL(stream);
+        navigator.webkitGetUserMedia(
+            {video: {optional: [{minWidth: 320},
+                                {minWidth: 640},
+                                {minWidth: 1024},
+                                {minWidth: 1280},
+                                {minWidth: 1920},
+                                {minWidth: 2560}]}},
+            (stream) => {
+                this.video.src = webkitURL.createObjectURL(stream);
+                this.initVideo();
             }, function(error){
             console.log("Failed to get a stream due to", error);
         });
 
-        if(!this.video.src){
-            console.log("no data from webcam");
-        }
+        this.renderer = new THREE.WebGLRenderer({canvas: this.canvas_element});
+        document.body.appendChild(this.renderer.domElement);
+        this.renderer.render(this.scene, this.camera);
 
+        //draw the plane and add diagonal ratios
+        this.geometry = new THREE.PlaneBufferGeometry(width, height, 1, 1);
+        var diagonalRatios = new Float32Array(4);
+        for (var i = 0; i < 4; i++) {
+            diagonalRatios[0] = 1.0;
+        }
+        this.geometry.addAttribute('diagonalRatio', new
+                                   THREE.BufferAttribute(diagonalRatios, 1));
+    }
+
+    initVideo() {
         //add video texture
-        this.videoTexture = new THREE.Texture( this.video );
+        this.videoTexture = new THREE.Texture(this.video);
         this.videoTexture.minFilter = THREE.NearestFilter;
         this.videoTexture.magFilter = THREE.NearestFilter;
 
@@ -99,28 +118,15 @@ void main() {
     gl_FragColor = texture2D(uSampler, textureCoord.xy/textureCoord.w);
 }`;
 
-        customMaterial = new THREE.ShaderMaterial({
+        var customMaterial = new THREE.ShaderMaterial({
             uniforms: customUniforms,
             side: THREE.DoubleSide,
             vertexShader: vertexShader,
             fragmentShader: fragmentShader
         });
 
-        //draw the plane and add diagonal ratios
-        this.geometry = new THREE.PlaneBufferGeometry(width, height, 1, 1);
-        var diagonalRatios = new Float32Array(4);
-        for (var i = 0; i < 4; i++) {
-            diagonalRatios[0] = 1.0;
-        }
-        this.geometry.addAttribute('diagonalRatio', new
-                                   THREE.BufferAttribute(diagonalRatios, 1));
-
         this.mesh = new THREE.Mesh(this.geometry, customMaterial);
         this.scene.add(this.mesh);
-        this.renderer = new THREE.WebGLRenderer({canvas: this.canvas_element});
-        document.body.appendChild(this.renderer.domElement);
-        this.renderer.render(this.scene, this.camera);
-
 
         var diagonalRatios = this.calculateDiagonalRatios();
         if(diagonalRatios){
@@ -132,6 +138,50 @@ void main() {
     }
 
     onControlPointChange(d){
+        //d consists of points x, y and index
+        var pos = [];
+        var vectorSet = [];
+
+
+        //canvas space to camera space
+        for (var i = 0; i < this.controlPoints.length; i++) {
+            vectorSet[i] = new THREE.Vector3((this.controlPoints[i].x / this.sceneWidth) * 2 - 1,
+                                             -(this.controlPoints[i].y / this.sceneHeight) * 2 + 1, 0.5);
+            vectorSet[i].unproject(this.camera);
+            var dir = vectorSet[i].sub(this.camera.position).normalize();
+            var distance = -this.camera.position.z / dir.z;
+            pos[i] = this.camera.position.clone().add(dir.multiplyScalar(distance));
+        }
+
+        var posArray = [];
+
+        //turn pos (THREE.vector array) into a array
+        for(var i = 0; i < pos.length; i++){
+            posArray.push(pos[i].x);
+            posArray.push(pos[i].y);
+        }
+
+        if(!this.prevPos)
+            this.prevPos = $.extend(true, [], posArray);
+        var transform = PerspT(posArray, this.prevPos).coeffsInv;
+        this.prevPos = $.extend(true, [], posArray);
+
+        var geoPos = this.geometry.attributes.position.array;
+        if(this.updatePos){
+            [geoPos[3], geoPos[4]]  = this.getUpdatedPos(geoPos[3], geoPos[4], transform);
+            [geoPos[9], geoPos[10]] = this.getUpdatedPos(geoPos[9], geoPos[10], transform);
+            [geoPos[6], geoPos[7]] = this.getUpdatedPos(geoPos[6], geoPos[7], transform);
+            [geoPos[0], geoPos[1]] = this.getUpdatedPos(geoPos[0], geoPos[1], transform);
+        }
+
+        //new diagonal ratios
+        var diagonalRatios = this.calculateDiagonalRatios();
+        if(diagonalRatios){
+            for (var i = 0; i < 4; i++) {
+                this.geometry.attributes.diagonalRatio.array[i] = diagonalRatios[i];
+            }
+        }
+
     }
 
     listen() {
@@ -149,6 +199,9 @@ void main() {
     }
 
     render() {
+        stats.update();
+        orbit.update();
+
         if( this.video.readyState === this.video.HAVE_ENOUGH_DATA ){
             this.videoTexture.needsUpdate = true;
         }
@@ -239,4 +292,3 @@ void main() {
         this.onControlPointChange(null);
     }
 }
-
