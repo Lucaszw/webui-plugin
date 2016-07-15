@@ -71,7 +71,10 @@
                 // drawing.
                 orbit = new THREE.OrbitControls(this.tp.camera,
                                                 this.tp.renderer.domElement);
-                orbit.position0.set(svgGroup.center.x, svgGroup.center.y, 65);
+                var distance = 1.1 * Math.max(svgGroup.bounding_box.height,
+                                              svgGroup.bounding_box.width);
+                orbit.position0.set(svgGroup.center.x, svgGroup.center.y,
+                                    distance);
                 orbit.target0 = svgGroup.center;
                 orbit.reset();
                 orbit.enableRotate = false;
