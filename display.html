@@ -106,6 +106,8 @@
 
                 var gui = new dat.GUI();
                 var menu = gui;
+                menu.add(orbit, 'enableRotate');
+                menu.add(orbit, 'reset');
                 menu.add(threePlane, 'displayHandles');
                 menu.add(threePlane, 'rotateRight');
                 menu.add(threePlane, 'rotateLeft');
@@ -140,6 +142,8 @@
                             shape_i.material.transparent = true;
                         }
                     });
+                    svgGroup.shapesGroup.position.z =
+                        .001 * svgGroup.bounding_box.height;
                     init(svgGroup);
                 });
                 // Start injection.  The "loaded" event will be triggered when
