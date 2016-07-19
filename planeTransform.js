@@ -4,7 +4,8 @@ class planeTransform{
         //if two points are the same, the texture disappears
         //plane jumps to other side
         this.frame = 0;
-        this.displayHandles = false;
+        this.displayHandles = true;
+        this.prevDisplayHandles = true;
         this.updatePos = true;
         this.canvas_element = canvas_element;
         this.control_handles_element = control_handles_element;
@@ -17,6 +18,7 @@ class planeTransform{
     init(){
         /* global variables
          var camera, scene, renderer, geometry, prevPos, updatePos;
+         var savedGeometryPosition
          var video, videoTexture;
          var controlPoints, pointsUI;*/
 
@@ -102,21 +104,21 @@ class planeTransform{
         };
 
         var vertexShader = `
-varying vec4 textureCoord;
-attribute float diagonalRatio;
-void main() {
-    textureCoord = vec4(uv.xy, 0.0, 1.0);
-    textureCoord.w = diagonalRatio;
-    textureCoord.xy *= textureCoord.w;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-}`;
+        varying vec4 textureCoord;
+        attribute float diagonalRatio;
+        void main() {
+            textureCoord = vec4(uv.xy, 0.0, 1.0);
+            textureCoord.w = diagonalRatio;
+            textureCoord.xy *= textureCoord.w;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }`;
 
         var fragmentShader = `
-uniform sampler2D uSampler;
-varying vec4 textureCoord;
-void main() {
-    gl_FragColor = texture2D(uSampler, textureCoord.xy/textureCoord.w);
-}`;
+        uniform sampler2D uSampler;
+        varying vec4 textureCoord;
+        void main() {
+            gl_FragColor = texture2D(uSampler, textureCoord.xy/textureCoord.w);
+        }`;
 
         var customMaterial = new THREE.ShaderMaterial({
             uniforms: customUniforms,
@@ -139,59 +141,94 @@ void main() {
 
     onControlPointChange(d){
         //d consists of points x, y and index
-        var pos = [];
-        var vectorSet = [];
-
+        var posArray = [];
 
         //canvas space to camera space
         for (var i = 0; i < this.controlPoints.length; i++) {
-            vectorSet[i] = new THREE.Vector3((this.controlPoints[i].x / this.sceneWidth) * 2 - 1,
+            var vector = new THREE.Vector3((this.controlPoints[i].x / this.sceneWidth) * 2 - 1,
                                              -(this.controlPoints[i].y / this.sceneHeight) * 2 + 1, 0.5);
-            vectorSet[i].unproject(this.camera);
-            var dir = vectorSet[i].sub(this.camera.position).normalize();
+            vector.unproject(this.camera);
+            var dir = vector.sub(this.camera.position).normalize();
             var distance = -this.camera.position.z / dir.z;
-            pos[i] = this.camera.position.clone().add(dir.multiplyScalar(distance));
+            var pos = this.camera.position.clone().add(dir.multiplyScalar(distance));
+            posArray.push(pos.x);
+            posArray.push(pos.y);
         }
 
-        var posArray = [];
-
-        //turn pos (THREE.vector array) into a array
-        for(var i = 0; i < pos.length; i++){
-            posArray.push(pos[i].x);
-            posArray.push(pos[i].y);
-        }
-
-        if(!this.prevPos)
-            this.prevPos = $.extend(true, [], posArray);
-        var transform = PerspT(posArray, this.prevPos).coeffsInv;
-        this.prevPos = $.extend(true, [], posArray);
-
-        var geoPos = this.geometry.attributes.position.array;
         if(this.updatePos){
-            [geoPos[3], geoPos[4]]  = this.getUpdatedPos(geoPos[3], geoPos[4], transform);
-            [geoPos[9], geoPos[10]] = this.getUpdatedPos(geoPos[9], geoPos[10], transform);
-            [geoPos[6], geoPos[7]] = this.getUpdatedPos(geoPos[6], geoPos[7], transform);
-            [geoPos[0], geoPos[1]] = this.getUpdatedPos(geoPos[0], geoPos[1], transform);
+            if(!this.prevPos)
+                this.prevPos = $.extend(true, [], posArray);
+            var transform = PerspT(posArray, this.prevPos).coeffsInv;
+
+            var geoPos = this.getUpdatedPosArray(this.geometry.attributes.position.array, transform, 3);
+            for (var i = 0; i < geoPos.length; i++){
+                this.geometry.attributes.position.array[i] = geoPos[i];
+            }
         }
+        this.prevPos = $.extend(true, [], posArray);
 
         //new diagonal ratios
         var diagonalRatios = this.calculateDiagonalRatios();
         if(diagonalRatios){
-            for (var i = 0; i < 4; i++) {
+            for (var i = 0; i < diagonalRatios.length; i++) {
                 this.geometry.attributes.diagonalRatio.array[i] = diagonalRatios[i];
             }
         }
 
+    }
+    
+    remapControlHandles(){
+        if(this.savedGeometryPosition){
+            var newControlPos = this.cameraToScreen(this.geometry.attributes.position.array);
+            var transform = PerspT(this.savedGeometryPosition, newControlPos).coeffs;
+
+            var controlPointsArray = [];
+            for(var i = 0; i < this.controlPoints.length; i++){
+                controlPointsArray.push(this.controlPoints[i].x);
+                controlPointsArray.push(this.controlPoints[i].y);
+            }
+            var newControlPoints = this.getUpdatedPosArray(controlPointsArray, transform, 2);
+            for(var i = 0; i < this.controlPoints.length; i++){
+                this.controlPoints[i].x = newControlPoints[2*i];
+                this.controlPoints[i].y = newControlPoints[2*i + 1];
+            }
+            
+            this.pointsUI =
+            d3.controlPointsUI()(d3.select(this.control_handles_element)
+                                 .selectAll('circle')
+                                 .data(this.controlPoints)).radius(10);
+        }
+    }
+    
+    cameraToScreen(array){
+        var screenCoords = [];
+        
+        for(var i = 0; i < array.length/3; i++){
+            var vector = new THREE.Vector3(array[3*i], array[3*i+1], array[3*i+2]);
+            vector.project(this.camera);
+            screenCoords.push((vector.x + 1)*this.sceneWidth/2);
+            screenCoords.push((-vector.y + 1)*this.sceneHeight/2);
+        }
+        return screenCoords;
     }
 
     listen() {
         requestAnimationFrame(() => this.listen());
 
         //datgui handling
-        if(this.displayHandles)
+        if(this.displayHandles){
+            if(!this.prevDisplayHandles)
+                this.remapControlHandles();
             $(this.control_handles_element).show();
-        else
+        }
+        else{
+            if(this.prevDisplayHandles){
+                this.savedGeometryPosition = this.cameraToScreen(this.geometry.attributes.position.array);
+            }
             $(this.control_handles_element).hide();
+        }
+        //so some updates only happen on toggle
+        this.prevDisplayHandles = this.displayHandles;
 
         this.frame += 1;
         this.render();
@@ -227,7 +264,8 @@ void main() {
     calculateDiagonalRatios(){
         if(this.geometry === undefined)
             return false;
-
+        
+        //four corners (top right, bottom right... etc)
         var tr, br, tl, bl;
         tr = [this.geometry.attributes.position.array[3], this.geometry.attributes.position.array[4]];
         br = [this.geometry.attributes.position.array[9], this.geometry.attributes.position.array[10]]
@@ -262,6 +300,19 @@ void main() {
         var X = x*M[0]/W + y*M[1]/W + M[2]/W;
         var Y = x*M[3]/W + y*M[4]/W + M[5]/W;
         return [X, Y];
+    }
+    
+    getUpdatedPosArray(array, M, dim){
+        var newArray = [];
+        
+        for(var i = 0; i < array.length/dim; i ++){
+            var result = this.getUpdatedPos(array[dim*i], array[dim*i+1], M);
+            newArray.push(result[0]);
+            newArray.push(result[1]);
+            if(dim == 3)
+                newArray.push(0.0);
+        }
+        return newArray;
     }
 
     rotateLeft(){

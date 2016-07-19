@@ -69,7 +69,7 @@ ThreeHelpers.drawShapes = function (jq_selection, fillOptions, lineOptions) {
      *         objects.
      *
      */
-    lineOptions = lineOptions || {color: 0x333333, linewidth: 3};
+    lineOptions = lineOptions || {color: 0x333333, linewidth: 1};
     fillOptions = fillOptions || {color: 0xffffff, wireframe: false};
     return jq_selection.map(function () {
         var shape2d = two.interpret(this);

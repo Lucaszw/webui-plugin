@@ -106,14 +106,16 @@
 
                 var gui = new dat.GUI();
                 var menu = gui;
-                menu.add(orbit, 'enableRotate');
-                menu.add(orbit, 'reset');
-                menu.add(threePlane, 'displayHandles');
-                menu.add(threePlane, 'rotateRight');
-                menu.add(threePlane, 'rotateLeft');
-                menu.add(threePlane, 'flipHorizontal');
-                menu.add(threePlane, 'flipVertical');
+                var f1 = menu.addFolder("Transforms");
+                f1.add(threePlane, 'rotateRight');
+                f1.add(threePlane, 'rotateLeft');
+                f1.add(threePlane, 'flipHorizontal');
+                f1.add(threePlane, 'flipVertical');
 
+                menu.add(orbit, 'enableRotate');
+                menu.add(threePlane, 'displayHandles');
+                menu.add(orbit, 'reset');
+                
                 threePlane.listen();
 
                 var position = threePlane.geometry.attributes.position.array;
