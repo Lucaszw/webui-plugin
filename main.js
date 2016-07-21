@@ -4,6 +4,44 @@ var shapeMeshesFromArray = _fp.map(_fp.get("children[0]"));
 var elementsById = _fp.flow(_fp.map((element) => [element.id, element]),
                             _.fromPairs);
 var interpretPaths = _fp.mapValues((path) => two.interpret(path));
+/* Function: `computeMeshBoundingBoxes`
+ *
+ * Args
+ * ----
+ *
+ *     (Object) : `key->mesh` mapping, where each mesh is a `THREE.Mesh`.
+ *
+ * Returns
+ * -------
+ *
+ *     (Object) : `key->bounding box` mapping, where each bounding box is an
+ *         `Object` with the properties `min` and `max` (as `THREE.Vector3`
+ *         instances).
+ */
+var computeMeshBoundingBoxes = _fp.flow(_fp.forEach(function (value, key) {
+                                                        value.geometry
+                                                        .computeBoundingBox();
+                                                    }),
+                                        _fp.mapValues(
+                                            _fp.get("geometry.boundingBox")));
+/* Function: `computeCenters`
+ *
+ * Args
+ * ----
+ *
+ *     (Object) : `key->bounding box` mapping, where each bounding box is an
+ *         `Object` with the properties `min` and `max` (as `THREE.Vector3`
+ *         instances).
+ *
+ * Returns
+ * -------
+ *
+ *     (Object) : `key->center` mapping, where each center is a
+ *         `THREE.Vector3`.
+ */
+var computeCenters = _fp.mapValues(function (bbox_i) {
+    return bbox_i.max.sub(bbox_i.min).multiplyScalar(.5).add(bbox_i.min);
+});
 
 
 function dataFrameToShapes(df_i) {
@@ -258,8 +296,13 @@ class DeviceView {
     setShapes(shapes) {
         this.resetShapes();
         this.shapes = shapes;
+        // Compute the center position (`THREE.Vector3`) of each shape.
+        this.shapeCenters = _fp.flow(computeMeshBoundingBoxes,
+                                     computeCenters)(shapes.shapeMeshes);
 
         initShapes(this.threePlane.scene, this.orbit, this.shapes);
+        // Move the corners of the video plane to match the bounding box of all
+        // the shapes.
         centerVideo(this.threePlane, this.shapes.boundingBox);
 
         var args = {element: this.threePlane.canvas_element,
@@ -269,6 +312,7 @@ class DeviceView {
         // high-level shape events.
         this.mouseHandler = new ThreeHelpers.MouseEventHandler(args);
 
+        // Notify that the shapes have been set.
         this.trigger("shapes-set", shapes);
     }
 
