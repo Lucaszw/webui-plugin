@@ -279,7 +279,7 @@ class DeviceView {
                                      {boundingBox: bounding_box});
                 styleShapes(shapes);
                 this.setShapes(shapes);
-                resolve(shape, svg);
+                resolve({shape: shape, svg: svg});
             });
         });
     }
