@@ -77,7 +77,6 @@ class planeTransform{
         });
 
         this.renderer = new THREE.WebGLRenderer({canvas: this.canvas_element});
-        document.body.appendChild(this.renderer.domElement);
         this.renderer.render(this.scene, this.camera);
 
         //draw the plane and add diagonal ratios
