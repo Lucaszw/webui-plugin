@@ -90,13 +90,7 @@ function initStats() {
 }
 
 
-function createMouseHandler(gl_element, shapeMeshes, camera) {
-    // Create event manager to translate mouse movement and presses
-    // high-level shape events.
-    mouseHandler = (new ThreeHelpers
-                    .MouseEventHandler({element: gl_element,
-                                        shapes: shapeMeshes,
-                                        camera: camera}));
+function bindDemoMouseHandlers(mouseHandler) {
     mouseHandler.on("mouseover", function (x, y, shape)
                     { invertColor(shape); });
     mouseHandler.on("mouseout", function (x, y, shape)
@@ -108,7 +102,6 @@ function createMouseHandler(gl_element, shapeMeshes, camera) {
             shape_i.object.material.opacity = 1 - opacity_i;
         });
     });
-    return mouseHandler;
 }
 
 
@@ -241,6 +234,8 @@ class DeviceView {
         this.menu.add(this.orbit, 'enableRotate');
         this.menu.add(this.threePlane, 'displayHandles');
         this.menu.add(this.orbit, 'reset');
+
+        _.extend(this, Backbone.Events);
     }
 
     update() {
@@ -266,9 +261,15 @@ class DeviceView {
 
         initShapes(this.threePlane.scene, this.orbit, this.shapes);
         centerVideo(this.threePlane, this.shapes.boundingBox);
-        this.mouseHandler = createMouseHandler(this.threePlane.canvas_element,
-                                               this.shapes.shapeMeshes,
-                                               this.threePlane.camera);
+
+        var args = {element: this.threePlane.canvas_element,
+                    shapes: this.shapes.shapeMeshes,
+                    camera: this.threePlane.camera};
+        // Create event manager to translate mouse movement and presses
+        // high-level shape events.
+        this.mouseHandler = new ThreeHelpers.MouseEventHandler(args);
+
+        this.trigger("shapes-set", shapes);
     }
 
     loadSvg(svg_url) {
