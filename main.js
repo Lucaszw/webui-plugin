@@ -98,6 +98,7 @@ function createMouseHandler(gl_element, shapeMeshes, camera) {
             shape_i.object.material.opacity = 1 - opacity_i;
         });
     });
+    return mouseHandler;
 }
 
 
