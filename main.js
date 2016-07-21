@@ -1,6 +1,9 @@
 // Create function to extract the filled mesh for each shape.
-var shapeMeshes = _fp.flow(_fp.mapValues(_fp.get("children[0]")), _.values);
+var shapeMeshes = _fp.mapValues(_fp.get("children[0]"));
 var shapeMeshesFromArray = _fp.map(_fp.get("children[0]"));
+var elementsById = _fp.flow(_fp.map((element) => [element.id, element]),
+                            _.fromPairs);
+var interpretPaths = _fp.mapValues((path) => two.interpret(path));
 
 
 function dataFrameToShapes(df_i) {
@@ -8,6 +11,13 @@ function dataFrameToShapes(df_i) {
     var boundingBox_i = boundingBox(df_i);
     // Create a `THREE.Shape` for each shape (i.e., "id") in `df_i` frame.
     var shapes = ThreeHelpers.shapesById(df_i);
+    var wrappedShapes = wrapShapes(shapes);
+    wrappedShapes['boundingBox'] = boundingBox_i;
+    return wrappedShapes;
+}
+
+
+function wrapShapes(shapes) {
     // Create a `THREE.Group` for each shape, containing a filled mesh and an
     // outline.
     var shapeGroups = _.mapValues(shapes, _.unary(shapeGroup));
@@ -18,8 +28,7 @@ function dataFrameToShapes(df_i) {
     // Extract `Array` containing the filled mesh for each shape.
     var shapeMeshes_i = shapeMeshes(shapeGroups);
 
-    return {boundingBox: boundingBox_i,
-            parentGroup: parentGroup,
+    return {parentGroup: parentGroup,
             shapeMeshes: shapeMeshes_i};
 }
 
@@ -252,21 +261,20 @@ class DeviceView {
     }
 
     loadSvg(svg_url) {
-        var self = this;
-        return new Promise(function (resolve, reject) {
-            two.load(svg_url, function (shape, svg) {
-                var shapesGroup =
-                    ThreeHelpers.SvgPathsGroup($(svg).find("g > path"));
+        return new Promise((resolve, reject) => {
+            two.load(svg_url, (shape, svg) => {
+                var paths = elementsById($(svg).find("g > path").toArray());
+                var twoPaths = interpretPaths(paths);
+                var threeShapes = _fp.mapValues(ThreeHelpers
+                                                .extractShape)(twoPaths);
                 var bounding_box = shape.getBoundingClientRect();
 
                 // Create simplified adapter object which is compatible
                 // with the `DeviceView.setShapes` API.
-                var shapes = {boundingBox: bounding_box,
-                              parentGroup: shapesGroup,
-                              shapeMeshes:
-                              shapeMeshesFromArray(shapesGroup.children)};
+                var shapes = _.merge(wrapShapes(threeShapes),
+                                     {boundingBox: bounding_box});
                 styleShapes(shapes);
-                self.setShapes(shapes);
+                this.setShapes(shapes);
                 resolve(shape, svg);
             });
         });
