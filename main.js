@@ -137,7 +137,7 @@ var deviceView;
 
 function listenSocket(deviceView) {
     // Change to an empty string to use the global namespace.
-    namespace = '/test';
+    namespace = '/zmq_plugin';
 
     // The socket.io documentation recommends sending an explicit
     // package upon connection.
