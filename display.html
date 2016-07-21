@@ -19,8 +19,14 @@
         <script type="text/javascript" src="OrbitControls.js"></script>
         <script type="text/javascript" src="two.min.js"></script>
         <script type="text/javascript" src="svg-injector.min.js"></script>
+        <script type="text/javascript" src="socket.io.min.js"></script>
+        <script type="text/javascript" src="lodash.min.js"></script>
+        <script type="text/javascript" src="lodash.fp.min.js"></script>
+        <script type="text/javascript" src="pandas-helpers.js"></script>
+        <script type="text/javascript" src="zmq-plugin.js"></script>
         <script type="text/javascript" src="ThreeHelpers.MouseEventHandler.js"></script>
         <script type="text/javascript" src="ThreeHelpers.SvgPathsGroup.js"></script>
+        <script type="text/javascript" src="main.js"></script>
     </head>
 
     <body>
@@ -35,126 +41,33 @@
         </div>
 
         <script type='text/javascript'>
-            var stats;
-            var orbit;
-            var gl_element = $("#canvasID");
-
-            function invertColor(shape) {
-                var color_i = new THREE.Color(shape.object.material.color);
-                shape.object.material.color.setRGB(1. - color_i.r,
-                                                   1. - color_i.g,
-                                                   1. - color_i.b);
-            }
-
-            function initStats() {
-                stats = new Stats();
-                stats.setMode(0); // 0: fps, 1: ms
-
-                // Align top-left
-                stats.domElement.style.position = 'absolute';
-                stats.domElement.style.left = '0px';
-                stats.domElement.style.top = '0px';
-
-                document.getElementById("Stats-output").appendChild(stats
-                                                                    .domElement);
-
-                return stats;
-            }
-
-            function init(svgGroup) {
-                stats = initStats();
-                var threePlane = new planeTransform($("#canvasID")[0],
-                                                    $("#controlHandles")[0]);
-                this.tp = threePlane;
-
-                // Create orbit controls to zoom, pan, etc.  Start at center of SVG
-                // drawing.
-                orbit = new THREE.OrbitControls(this.tp.camera,
-                                                this.tp.renderer.domElement);
-                var distance = 1.1 * Math.max(svgGroup.bounding_box.height,
-                                              svgGroup.bounding_box.width);
-                orbit.position0.set(svgGroup.center.x, svgGroup.center.y,
-                                    distance);
-                orbit.target0 = svgGroup.center;
-                orbit.reset();
-                orbit.enableRotate = false;
-
-                // Get list of meshes corresponding to fill of SVG `<path>` elements.
-                var shapeMeshes = svgGroup.shapesGroup.children.map(
-                    function (shape_i) { return shape_i.children[0]; });
-
-                // Add it to the scene.
-                this.tp.scene.add(svgGroup.shapesGroup);
-
-                // Create event manager to translate mouse movement and presses
-                // high-level shape events.
-                mouseHandler = (new ThreeHelpers
-                                .MouseEventHandler({element: gl_element,
-                                                    shapes: shapeMeshes,
-                                                    camera: threePlane.camera}));
-                mouseHandler.on("mouseover", function (x, y, shape)
-                                { invertColor(shape); });
-                mouseHandler.on("mouseout", function (x, y, shape)
-                                { invertColor(shape); });
-                mouseHandler.on("clicked", function (x, y, shapes_i) {
-                    // Invert opacity of shape when it is clicked.
-                    shapes_i.map(function (shape_i) {
-                        var opacity_i = shape_i.object.material.opacity;
-                        shape_i.object.material.opacity = 1 - opacity_i;
-                    });
-                });
-
-                var gui = new dat.GUI();
-                var menu = gui;
-                var f1 = menu.addFolder("Transforms");
-                f1.add(threePlane, 'rotateRight');
-                f1.add(threePlane, 'rotateLeft');
-                f1.add(threePlane, 'flipHorizontal');
-                f1.add(threePlane, 'flipVertical');
-
-                menu.add(orbit, 'enableRotate');
-                menu.add(threePlane, 'displayHandles');
-                menu.add(orbit, 'reset');
-                
-                threePlane.listen();
-
-                var position = threePlane.geometry.attributes.position.array;
-                var bbox = svgGroup.bounding_box;
-
-                position[0] = bbox.left;
-                position[1] = bbox.bottom;
-                position[3] = bbox.right;
-                position[4] = bbox.bottom;
-                position[6] = bbox.left;
-                position[7] = bbox.top;
-                position[9] = bbox.right;
-                position[10] = bbox.top;
-            }
-
             $(window).on("load", function () {
-                /* Inject `<img src="*.svg">` tag as `<svg ...>` element. */
+                // Create three.js scene, stats widget, and video (webcam) plane.
+                deviceView = new DeviceView();
 
-                svgGroup = new ThreeHelpers.SvgGroup($("#device-image"));
-                // After `<svg>` tag is injected, call `init()` function.
-                svgGroup.on("loaded", function (svg, shapesGroup_i) {
-                    // Set opacity and transparency of each shape.
-                    shapesGroup_i.traverse(function (shape_i) {
-                        if (shape_i.material) {
-                            shape_i.material.opacity = 0.3;
-                            shape_i.material.transparent = true;
-                        }
-                    });
-                    svgGroup.shapesGroup.position.z =
-                        .001 * svgGroup.bounding_box.height;
-                    init(svgGroup);
-                });
-                // Start injection.  The "loaded" event will be triggered when
-                // injection is complete.
-                svgGroup.load();
+                // Listen for messages from 0MQ through socket.io proxy.
+                // e.g., when a new Microdrop device is loaded, draw device
+                // layout over video.
+                listenSocket(deviceView);
+
+                // Start rendering ([rate determined by browser][1]).
+                //
+                // [1]: https://developer.mozilla.org/en-US/docs/Web/API/window/requestAnimationFrame
+                function render() {
+                    deviceView.update();
+                    requestAnimationFrame(render);
+                }
+                render();
+
+                // Add buttons to `dat.gui` controls to load test images.
+                var testingFolder = deviceView.menu.addFolder("Testing");
+                var testFuncs = {'load 90 pin':
+                                 () => deviceView.loadSvg('device-90pin.svg'),
+                                 'load gcc':
+                                 () => deviceView.loadSvg('device-gcc.svg')};
+                testingFolder.add(testFuncs, 'load 90 pin');
+                testingFolder.add(testFuncs, 'load gcc');
             });
         </script>
     </body>
 </html>
-        
-
-    

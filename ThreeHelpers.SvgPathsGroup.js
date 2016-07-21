@@ -3,6 +3,47 @@ var ThreeHelpers = ThreeHelpers || {};
 var two = two || new Two({type: Two.Types['svg']});
 
 
+ThreeHelpers.drawShapes = function (jq_selection, fillOptions, lineOptions) {
+    /*
+     * Create a three.js group object for element in the selection.
+     *
+     * Args
+     * ----
+     *
+     *     jq_selection (jQuery selection) : Selection specifying which
+     *         shapes to process.  Each shape must be compatible with
+     *         the `Two.interpret` method.
+     *
+     * Returns
+     * -------
+     *
+     *     (object) : Array-like object containing three.js shape
+     *         objects.
+     *
+     */
+    lineOptions = lineOptions || {color: 0x333333, linewidth: 1};
+    fillOptions = fillOptions || {color: 0xffffff, wireframe: false};
+    return jq_selection.map(function () {
+        var shape2d = two.interpret(this);
+        shape2d.visible = false;
+        var shape3d = ThreeHelpers.extractShape(shape2d);
+
+        var points = shape3d.createPointsGeometry();
+        var material = new THREE.LineBasicMaterial(lineOptions);
+        var outline = new THREE.Line(points, material);
+
+        var group = new THREE.Group();
+        var meshMaterial = new THREE.MeshBasicMaterial(fillOptions);
+        var geometry = new THREE.ShapeGeometry(shape3d);
+
+        var fill = new THREE.Mesh(geometry, meshMaterial);
+        shape3d.autoClose = true;
+        group.add(fill);
+        group.add(outline);
+        return group;
+    });
+}
+
 ThreeHelpers.extractShape = function (twojs_shape) {
   /*
    * Args
@@ -49,46 +90,6 @@ ThreeHelpers.extractShape = function (twojs_shape) {
   }
 
   return shape;
-}
-
-ThreeHelpers.drawShapes = function (jq_selection, fillOptions, lineOptions) {
-    /*
-     * Create a three.js group object for element in the selection.
-     *
-     * Args
-     * ----
-     *
-     *     jq_selection (jQuery selection) : Selection specifying which
-     *         shapes to process.  Each shape must be compatible with
-     *         the `Two.interpret` method.
-     *
-     * Returns
-     * -------
-     *
-     *     (object) : Array-like object containing three.js shape
-     *         objects.
-     *
-     */
-    lineOptions = lineOptions || {color: 0x333333, linewidth: 1};
-    fillOptions = fillOptions || {color: 0xffffff, wireframe: false};
-    return jq_selection.map(function () {
-        var shape2d = two.interpret(this);
-        shape2d.visible = false;
-        var shape3d = ThreeHelpers.extractShape(shape2d);
-
-        var options = {amount: 0, bevelEnabled: false};
-        var points = shape3d.createPointsGeometry();
-        var material = new THREE.LineBasicMaterial(lineOptions);
-        var group = new THREE.Group();
-        var meshMaterial = new THREE.MeshBasicMaterial(fillOptions);
-        var geometry = new THREE.ShapeGeometry(shape3d);
-        var fill = new THREE.Mesh(geometry, meshMaterial);
-        shape3d.autoClose = true;
-        var outline = new THREE.Line(points, material);
-        group.add(fill);
-        group.add(outline);
-        return group;
-    });
 }
 
 ThreeHelpers.SvgPathsGroup = function (jq_selection) {
@@ -152,4 +153,89 @@ ThreeHelpers.SvgGroup = function (svgImages) {
                     function (totalSVGsInjected) {});
     }
     _.extend(self, Backbone.Events);
+}
+
+
+ThreeHelpers.verticesToShape = function (vertices) {
+  /*
+   * Args
+   * ----
+   *
+   *     vertices (Array) : Array of vertex objects, each with at least the
+   *         properties `x` and `y`.
+   *
+   * Returns
+   * -------
+   *
+   *     (THREE.Shape) : three.js shape.
+   *
+   */
+  var shape = new THREE.Shape();
+
+  var vert = vertices[0];
+  shape.moveTo(vert.x, vert.y);
+
+  for (var i = 1; i < vertices.length; i++) {
+    vert = vertices[i];
+
+    shape.lineTo(vert.x, vert.y);
+  }
+
+  return shape;
+}
+
+
+ThreeHelpers.shapesById = function(df_i) {
+    /*
+     * Args
+     * ----
+     *
+     *     df_i (DataFrame) : Data frame containing at least the columns `id`,
+     *         `vertex_i`, `x`, and `y`, where each row corresponds to a single
+     *         vertex for shape identified by `id`.
+     *
+     * Returns
+     * -------
+     *
+     *     (Object) : Mapping from each shape `id` to a corresponding
+     *         `THREE.Shape`.
+     */
+    return _fp.mapValues(_fp.flow(_fp.sortBy("vertex_i"),
+                                  ThreeHelpers
+                                  .verticesToShape))(df_i.groupBy("id"));
+}
+
+
+function boundingBox(df_i) {
+    var xyStats_i = df_i.pick(["x", "y"]).describe()
+    var bbox_i = _.fromPairs(_.zip(["width", "height"], _fp.at(["x", "y"])
+                                   (_fp.mapValues(
+                                       _fp.flow(_fp.at(["max", "min"]),
+                                                _.spread(_.subtract)))
+                                    (xyStats_i))));
+    bbox_i.top = xyStats_i.y.min;
+    bbox_i.left = xyStats_i.x.min;
+    bbox_i.bottom = bbox_i.top + bbox_i.height;
+    bbox_i.right = bbox_i.left + bbox_i.width;
+    return bbox_i;
+}
+
+
+var shapeGroup = function (shape, lineOptions, fillOptions) {
+    lineOptions = lineOptions || {color: 0x333333, linewidth: 1};
+    fillOptions = fillOptions || {color: 0xffffff, wireframe: false};
+
+    var points = shape.createPointsGeometry();
+    var material = new THREE.LineBasicMaterial(lineOptions);
+    var outline = new THREE.Line(points, material);
+
+    var group = new THREE.Group();
+    var meshMaterial = new THREE.MeshBasicMaterial(fillOptions);
+    var geometry = new THREE.ShapeGeometry(shape);
+
+    var fill = new THREE.Mesh(geometry, meshMaterial);
+    shape.autoClose = true;
+    group.add(fill);
+    group.add(outline);
+    return group;
 }
