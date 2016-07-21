@@ -154,6 +154,9 @@ function listenSocket(deviceView) {
     // This is especially important when using the global namespace.
     socket = io.connect('http://' + document.domain + ':' + '5000' +
                         namespace);
+    socket.on('connect_error', function(msg) {
+        socket.close();
+    })
                         // location.port + namespace);
 
     socket.on('zmq', function(msg) {
