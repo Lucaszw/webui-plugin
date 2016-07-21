@@ -39,8 +39,9 @@ function styleShapes(shapes) {
                                                     shapes.boundingBox.width);
     // Style each filled shape mesh.
     _.forEach(shapes.shapeMeshes, function (value, key) {
+        // Tag each shape mesh with the `shape_id` for reverse lookup.
         value.shape_id = key;
-        value.material.opacity = 0.5;
+        value.material.opacity = 0.3;
         value.material.transparent = true;
     });
 }
