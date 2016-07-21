@@ -77,7 +77,6 @@ class planeTransform{
         });
 
         this.renderer = new THREE.WebGLRenderer({canvas: this.canvas_element});
-        document.body.appendChild(this.renderer.domElement);
         this.renderer.render(this.scene, this.camera);
 
         //draw the plane and add diagonal ratios
@@ -176,7 +175,7 @@ class planeTransform{
         }
 
     }
-    
+
     remapControlHandles(){
         if(this.savedGeometryPosition){
             var newControlPos = this.cameraToScreen(this.geometry.attributes.position.array);
@@ -192,17 +191,17 @@ class planeTransform{
                 this.controlPoints[i].x = newControlPoints[2*i];
                 this.controlPoints[i].y = newControlPoints[2*i + 1];
             }
-            
+
             this.pointsUI =
             d3.controlPointsUI()(d3.select(this.control_handles_element)
                                  .selectAll('circle')
                                  .data(this.controlPoints)).radius(10);
         }
     }
-    
+
     cameraToScreen(array){
         var screenCoords = [];
-        
+
         for(var i = 0; i < array.length/3; i++){
             var vector = new THREE.Vector3(array[3*i], array[3*i+1], array[3*i+2]);
             vector.project(this.camera);
@@ -212,9 +211,7 @@ class planeTransform{
         return screenCoords;
     }
 
-    listen() {
-        requestAnimationFrame(() => this.listen());
-
+    update() {
         //datgui handling
         if(this.displayHandles){
             if(!this.prevDisplayHandles)
@@ -231,14 +228,6 @@ class planeTransform{
         this.prevDisplayHandles = this.displayHandles;
 
         this.frame += 1;
-        this.render();
-
-    }
-
-    render() {
-        stats.update();
-        orbit.update();
-
         if( this.video.readyState === this.video.HAVE_ENOUGH_DATA ){
             this.videoTexture.needsUpdate = true;
         }
@@ -264,7 +253,7 @@ class planeTransform{
     calculateDiagonalRatios(){
         if(this.geometry === undefined)
             return false;
-        
+
         //four corners (top right, bottom right... etc)
         var tr, br, tl, bl;
         tr = [this.geometry.attributes.position.array[3], this.geometry.attributes.position.array[4]];
@@ -301,10 +290,10 @@ class planeTransform{
         var Y = x*M[3]/W + y*M[4]/W + M[5]/W;
         return [X, Y];
     }
-    
+
     getUpdatedPosArray(array, M, dim){
         var newArray = [];
-        
+
         for(var i = 0; i < array.length/dim; i ++){
             var result = this.getUpdatedPos(array[dim*i], array[dim*i+1], M);
             newArray.push(result[0]);
