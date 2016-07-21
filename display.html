@@ -68,6 +68,20 @@
                                  () => deviceView.loadSvg('device-gcc.svg')};
                 testingFolder.add(testFuncs, 'load 90 pin');
                 testingFolder.add(testFuncs, 'load gcc');
+
+
+                deviceView.on("shapes-set", function (shapes) {
+                    // Bind hover and click style effects (does not actually
+                    // turn electrodes on/off).
+                    bindDemoMouseHandlers(deviceView.mouseHandler);
+                    deviceView.mouseHandler.on(
+                        "clicked", function (x, y, intersects) {
+                            var intersection = intersects[0];
+                            var mesh = intersection.object;
+                            var scenePoint = intersection.point;
+                            console.log(mesh.shape_id, scenePoint);
+                    });
+                });
             });
         </script>
     </body>
