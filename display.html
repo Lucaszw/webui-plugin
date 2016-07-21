@@ -43,7 +43,8 @@
         <script type='text/javascript'>
             $(window).on("load", function () {
                 // Create three.js scene, stats widget, and video (webcam) plane.
-                deviceView = new DeviceView();
+                deviceView = new DeviceView($("#canvasID")[0],
+                                            $("#controlHandles")[0]);
 
                 // Listen for messages from 0MQ through socket.io proxy.
                 // e.g., when a new Microdrop device is loaded, draw device

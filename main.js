@@ -202,12 +202,12 @@ function listenSocket(deviceView) {
 
 
 class DeviceView {
-    constructor() {
+    constructor(canvasElement, controlHandlesElement) {
         // Create and display stats widget (displays frames per second).
         this.stats = initStats();
         // Create `three.js` scene and plane with video from webcam.
-        this.threePlane = new planeTransform($("#canvasID")[0],
-                                             $("#controlHandles")[0]);
+        this.threePlane = new planeTransform(canvasElement,
+                                             controlHandlesElement);
 
         // Create orbit controls to zoom, pan, etc.  Start at center of SVG
         // drawing.
