@@ -262,7 +262,7 @@ class DeviceView {
         this.orbit.reset();
         this.orbit.enableRotate = false;
 
-        this.menu = new dat.GUI();
+        this.menu = new dat.GUI({autoPlace: false});
         var transformFolder = this.menu.addFolder("Transforms");
         transformFolder.add(this.threePlane, 'rotateRight');
         transformFolder.add(this.threePlane, 'rotateLeft');
