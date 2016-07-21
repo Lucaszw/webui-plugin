@@ -254,6 +254,10 @@ class DeviceView {
             this.threePlane.scene.remove(this.shapes.parentGroup);
             this.shapes = null;
         }
+        if (this.mouseHandler) {
+            // Unbind any attached mouse event handlers.
+            this.mouseHandler.unbind();
+        }
     }
 
     setShapes(shapes) {
@@ -262,6 +266,9 @@ class DeviceView {
 
         initShapes(this.threePlane.scene, this.orbit, this.shapes);
         centerVideo(this.threePlane, this.shapes.boundingBox);
+        this.mouseHandler = createMouseHandler(this.threePlane.canvas_element,
+                                               this.shapes.shapeMeshes,
+                                               this.threePlane.camera);
     }
 
     loadSvg(svg_url) {
