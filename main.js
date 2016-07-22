@@ -40,7 +40,8 @@ var computeMeshBoundingBoxes = _fp.flow(_fp.forEach(function (value, key) {
  *         `THREE.Vector3`.
  */
 var computeCenters = _fp.mapValues(function (bbox_i) {
-    return bbox_i.max.sub(bbox_i.min).multiplyScalar(.5).add(bbox_i.min);
+    return (bbox_i.clone().max.sub(bbox_i.min).multiplyScalar(.5)
+            .add(bbox_i.min));
 });
 
 
