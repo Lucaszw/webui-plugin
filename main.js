@@ -228,6 +228,15 @@ function listenSocket(deviceView) {
                         // Refresh local device configuration.
                         console.log("on_device_loaded", data);
                         var df_i = new DataFrame(data.df_shapes);
+
+                        // Flip device shapes along x-axis.
+                        var y_column = df_i.columnPositions["y"];
+                        var getY = _fp.get(y_column);
+                        var setY = _.curry(_.set)(_, y_column);
+                        var max_y = _.max(_fp.map(getY)(df_i.values));
+                        var flipY = _fp.map((row) => setY(_.clone(row),
+                                                          max_y - getY(row)));
+                        df_i.values = flipY(df_i.values);
                         var shapes = dataFrameToShapes(df_i);
                         styleShapes(shapes);
                         deviceView.setShapes(shapes);
