@@ -46,7 +46,8 @@ if __name__ == '__main__':
     app = socketio.Middleware(sio, app)
 
     # deploy as an eventlet WSGI server
-    plugin = mn.Plugin('monitor', 'tcp://localhost:31000', {zmq.SUBSCRIBE: ''})
+    plugin = mn.Plugin('zmq_plugin_bridge', 'tcp://localhost:31000',
+                       {zmq.SUBSCRIBE: ''})
     gevent.spawn(mn.run_plugin, sio, plugin, logging.INFO, NAMESPACE)
     gevent.pywsgi.WSGIServer(('', 5000), app,
                              handler_class=
