@@ -200,7 +200,15 @@ function listenSocket(deviceView) {
                         namespace);
     socket.on('connect_error', function(msg) {
         socket.close();
-    })
+    });
+
+    socket.on('execute_reply', function(msg) {
+        console.log("execute_reply", msg);
+        data = ZmqPlugin.decode_content_data({"content": msg["response"]});
+        if (data) {
+            console.log(data);
+        }
+    });
 
     socket.on('zmq', function(msg) {
         // A message was received from 0MQ hub subscription.
