@@ -198,6 +198,13 @@ function listenSocket(deviceView) {
     // **TODO** Set websocket URI (might need to change from http to https)
     socket = io.connect('http://' + document.domain + ':' + '5000' +
                         namespace);
+
+    this.refresh_device = function() {
+        socket.emit("execute", {"args": ["wheelerlab.device_info_plugin",
+                                         "get_device"], "kwargs": {}})
+    }
+    deviceView.menu.add(this, 'refresh_device');
+
     socket.on('connect_error', function(msg) {
         socket.close();
     });
