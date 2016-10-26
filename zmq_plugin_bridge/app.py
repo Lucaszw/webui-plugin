@@ -29,9 +29,8 @@ def connect(sid, environ):
 
 @sio.on('disconnect', namespace=NAMESPACE)
 def disconnect(sid):
+    # **NOTE** Disconnection closes the socket, so emitting will fail.
     print('disconnect ', sid)
-    sio.emit('disconnect', {'disconnected': sid}, room=sid,
-             namespace=NAMESPACE)
 
 
 @sio.on('debug', namespace=NAMESPACE)
