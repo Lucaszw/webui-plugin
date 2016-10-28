@@ -16,17 +16,16 @@ var applyElectrodeStates = (_fp.forEach.convert({'cap': false})
 
 /* Function: `computeMeshBoundingBoxes`
  *
- * Args
- * ----
- *
- *     (Object) : `key->mesh` mapping, where each mesh is a `THREE.Mesh`.
+ * Parameters
+ * ----------
+ * object
+ *     `key->mesh` mapping, where each mesh is a `THREE.Mesh`.
  *
  * Returns
  * -------
- *
- *     (Object) : `key->bounding box` mapping, where each bounding box is an
- *         `Object` with the properties `min` and `max` (as `THREE.Vector3`
- *         instances).
+ * object
+ *     `key->bounding box` mapping, where each bounding box is an `Object` with
+ *     the properties `min` and `max` (as `THREE.Vector3` instances).
  */
 var computeMeshBoundingBoxes = _fp.flow(_fp.forEach(function (value, key) {
                                                         value.geometry
@@ -36,18 +35,16 @@ var computeMeshBoundingBoxes = _fp.flow(_fp.forEach(function (value, key) {
                                             _fp.get("geometry.boundingBox")));
 /* Function: `computeCenters`
  *
- * Args
- * ----
- *
- *     (Object) : `key->bounding box` mapping, where each bounding box is an
- *         `Object` with the properties `min` and `max` (as `THREE.Vector3`
- *         instances).
+ * Parameters
+ * ----------
+ * object
+ *     `key->bounding box` mapping, where each bounding box is an `Object` with
+ *     the properties `min` and `max` (as `THREE.Vector3` instances).
  *
  * Returns
  * -------
- *
- *     (Object) : `key->center` mapping, where each center is a
- *         `THREE.Vector3`.
+ * object
+ *     `key->center` mapping, where each center is a `THREE.Vector3`.
  */
 var computeCenters = _fp.mapValues(function (bbox_i) {
     return (bbox_i.clone().max.sub(bbox_i.min).multiplyScalar(.5)
