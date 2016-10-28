@@ -93,15 +93,6 @@ function styleShapes(shapes) {
 }
 
 
-
-function __legacy_cleanup__() {
-    // Remove default shape loaded from SVG  TODO Remove SVG loading.
-    this.tp.scene.remove(shapesGroup);
-    var dmf_device_i = temp1;
-    var df_i = new DataFrame(dmf_device_i.df_shapes);
-}
-
-
 function initShapes(scene, orbit, shapesGroup_i) {
     // Add parent group to scene (causes shapes to be drawn).
     scene.add(shapesGroup_i.parentGroup);
