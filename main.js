@@ -290,6 +290,32 @@ function listenSocket(deviceView) {
 }
 
 
+class Device {
+    constructor(json_device) {
+        _.map(['df_shapes', 'df_shape_connections', 'df_electrode_channels'],
+              (key) => { this[key] = new DataFrame(json_device[key]); });
+
+        // Flip device shapes along x-axis.
+        var y_column = this.df_shapes.columnPositions["y"];
+        var getY = _fp.get(y_column);
+        var setY = _.curry(_.set)(_, y_column);
+        var max_y = _.max(_fp.map(getY)(this.df_shapes.values));
+        var flipY = _fp.map((row) => setY(_.clone(row),
+                                            max_y - getY(row)));
+        this.df_shapes.values = flipY(this.df_shapes.values);
+
+        this.electrode_ids_by_channel = _.map(this.df_electrode_channels
+                                              .groupBy("channel"),
+                                              _fp.map(_fp
+                                                      .get("electrode_id")));
+        this.channels_by_electrode_id = _.mapValues(this.df_electrode_channels
+                                                    .groupBy("electrode_id"),
+                                                    _fp.map(_fp
+                                                            .get("channel")));
+    }
+}
+
+
 class DeviceView {
     constructor(canvasElement, controlHandlesElement) {
         // Create and display stats widget (displays frames per second).
