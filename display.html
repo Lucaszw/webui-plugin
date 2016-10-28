@@ -46,15 +46,23 @@
         </div>
 
         <script type='text/javascript'>
+            var device_ui_plugin;
             $(window).on("load", function () {
                 // Create three.js scene, stats widget, and video (webcam) plane.
                 deviceView = new DeviceView($("#canvasID")[0],
                                             $("#controlHandles")[0]);
 
+                // Change to an empty string to use the global namespace.
+                namespace = '/zmq_plugin';
                 // Listen for messages from 0MQ through socket.io proxy.
                 // e.g., when a new Microdrop device is loaded, draw device
                 // layout over video.
-                listenSocket(deviceView);
+                // **TODO** Set websocket URI (might need to change from http
+                // to https)
+                zmq_url = ('http://' + document.domain + ':' + '5000' +
+                           namespace)
+                device_ui_plugin = new DeviceUIPlugin(deviceView);
+                device_ui_plugin.listen(zmq_url);
 
                 // Start rendering ([rate determined by browser][1]).
                 //
@@ -91,7 +99,7 @@
                                  "kwargs":
                                  {electrode_id: mesh.shape_id,
                                   state: !(mesh.material.opacity > .5)}};
-                            socket.emit("execute", request);
+                            device_ui_plugin.socket.emit("execute", request);
 
                             console.log(mesh.shape_id, scenePoint);
                     });

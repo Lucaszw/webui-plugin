@@ -176,105 +176,98 @@ var threePlane;
 var deviceView;
 
 
-function listenSocket(deviceView) {
-    // Change to an empty string to use the global namespace.
-    namespace = '/zmq_plugin';
-
-    // The socket.io documentation recommends sending an explicit
-    // package upon connection.
-    // This is especially important when using the global namespace.
-    // **TODO** Set websocket URI (might need to change from http to https)
-    socket = io.connect('http://' + document.domain + ':' + '5000' +
-                        namespace);
-
-    this.refresh_device = function() {
-        socket.emit("execute", {"args": ["wheelerlab.device_info_plugin",
-                                         "get_device"], "kwargs": {}})
+class DeviceUIPlugin {
+    constructor(deviceView) {
+        this.device_view = deviceView;
+        this.socket = null;
+        this.device = null;
     }
-    deviceView.menu.add(this, 'refresh_device');
 
-    socket.on('connect_error', function(msg) {
-        socket.close();
-    });
+    listen(zmq_uri) {
+        this.socket = io.connect(zmq_uri);
 
-    socket.on('execute_reply', function(msg) {
-        console.log("execute_reply", msg);
-        data = ZmqPlugin.decode_content_data({"content": msg["response"]});
-        if (data) {
-            console.log(data);
+        this.refresh_device = () => {
+            this.socket.emit("execute",
+                             {"args": ["wheelerlab.device_info_plugin",
+                                       "get_device"], "kwargs": {}})
         }
-    });
+        this.device_view.menu.add(this, 'refresh_device');
 
-    socket.on('zmq', function(msg) {
-        // A message was received from 0MQ hub subscription.
-        var source = msg.header.source;
-        var target = msg.header.target;
-        var msg_type = msg.header.msg_type;
+        this.socket.on('connect_error', (msg) => this.socket.close());
 
-        var data;
-        try {
-            if ((source == 'wheelerlab.device_info_plugin') &&
-                (msg_type == 'execute_reply')) {
-                if (msg.content.command == 'get_device') {
-                    // A plugin requested device configuration from device info
-                    // plugin.
-                    data = ZmqPlugin.decode_content_data(msg);
-                    if (data) {
-                        // Refresh local device configuration.
-                        console.log("on_device_loaded", data);
-                        var df_i = new DataFrame(data.df_shapes);
-
-                        // Flip device shapes along x-axis.
-                        var y_column = df_i.columnPositions["y"];
-                        var getY = _fp.get(y_column);
-                        var setY = _.curry(_.set)(_, y_column);
-                        var max_y = _.max(_fp.map(getY)(df_i.values));
-                        var flipY = _fp.map((row) => setY(_.clone(row),
-                                                          max_y - getY(row)));
-                        df_i.values = flipY(df_i.values);
-                        var shapes = dataFrameToShapes(df_i);
-                        styleShapes(shapes);
-                        deviceView.setShapes(shapes);
-                    }
-                }
-            } else if ((source ==
-                        'wheelerlab.electrode_controller_plugin') &&
-                    (msg_type == 'execute_reply')) {
-                if (['set_electrode_state', 'set_electrode_states']
-                    .indexOf(msg['content']['command']) >= 0) {
-                    // The state of one or more electrodes has changed.
-                    data = ZmqPlugin.decode_content_data(msg);
-                    console.log("on_electrode_states_updated", data);
-                    applyElectrodeStates(extractElectrodeStates(data));
-                } else if (msg['content']['command'] ==
-                           'get_channel_states') {
-                    // A plugin has requested the state of all
-                    // channels/electrodes.
-                    data = ZmqPlugin.decode_content_data(msg);
-                    console.log("on_electrode_states_set", data);
-                    applyElectrodeStates(extractElectrodeStates(data));
-                } else {
-                    console.log('wheelerlab.electrode_controller_plugin',
-                                data);
-                }
-            } else if ((source == 'wheelerlab.droplet_planning_plugin')
-                    && (msg_type == 'execute_reply')) {
-                if (msg['content']['command'] == 'add_route') {
-                    console.log("TODO",
-                                "execute_async('wheelerlab.droplet_planning_plugin'",
-                                "get_routes");
-                } else if (msg['content']['command'] == 'get_routes') {
-                    data = ZmqPlugin.decode_content_data(msg);
-                    console.log("on_routes_set", data);
-                }
-            } else {
-                socket.most_recent = msg;
-                console.log("zmq subscribe message:", msg);
+        this.socket.on('execute_reply', (msg) => {
+            console.log("execute_reply", msg);
+            var data = ZmqPlugin.decode_content_data({"content":
+                                                      msg["response"]});
+            if (data) {
+                console.log(data);
             }
-        } catch (e) {
-            console.error('Error processing message from subscription socket.', e);
-        }
-    });
+        });
+
+        this.socket.on('zmq', (msg) => {
+            // A message was received from 0MQ hub subscription.
+            var source = msg.header.source;
+            var target = msg.header.target;
+            var msg_type = msg.header.msg_type;
+
+            var data;
+            try {
+                if ((source == 'wheelerlab.device_info_plugin') &&
+                    (msg_type == 'execute_reply')) {
+                    if (msg.content.command == 'get_device') {
+                        // A plugin requested device configuration from device
+                        // info plugin.
+                        data = ZmqPlugin.decode_content_data(msg);
+                        if (data) {
+                            // Refresh local device configuration.
+                            console.log("on_device_loaded", data);
+                            // **TODO** Use `Device` class
+                            this.device = new Device(data);
+                            var shapes = dataFrameToShapes(this.device
+                                                           .df_shapes);
+                            styleShapes(shapes);
+                            this.device_view.setShapes(shapes);
+                        }
+                    }
+                } else if ((source ==
+                            'wheelerlab.electrode_controller_plugin') &&
+                        (msg_type == 'execute_reply')) {
+                    if (['set_electrode_state', 'set_electrode_states']
+                        .indexOf(msg['content']['command']) >= 0) {
+                        // The state of one or more electrodes has changed.
+                        data = ZmqPlugin.decode_content_data(msg);
+                        console.log("on_electrode_states_updated", data);
+                        applyElectrodeStates(extractElectrodeStates(data));
+                    } else if (msg['content']['command'] ==
+                            'get_channel_states') {
+                        // A plugin has requested the state of all
+                        // channels/electrodes.
+                        data = ZmqPlugin.decode_content_data(msg);
+                        console.log("on_electrode_states_set", data);
+                        applyElectrodeStates(extractElectrodeStates(data));
+                    } else {
+                        console.log('wheelerlab.electrode_controller_plugin',
+                                    data);
+                    }
+                } else if ((source == 'wheelerlab.droplet_planning_plugin')
+                        && (msg_type == 'execute_reply')) {
+                    if (msg['content']['command'] == 'add_route') {
+                        console.log("TODO",
+                                    "execute_async('wheelerlab.droplet_planning_plugin'",
+                                    "get_routes");
+                    } else if (msg['content']['command'] == 'get_routes') {
+                        data = ZmqPlugin.decode_content_data(msg);
+                        console.log("on_routes_set", data);
+                    }
+                } else {
+                    this.socket.most_recent = msg;
+                    console.log("zmq subscribe message:", msg);
+                }
+            } catch (e) {
+                console.error('Error processing message from subscription socket.', e);
+            }
+        });
+    }
 }
 
 
