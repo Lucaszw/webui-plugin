@@ -184,7 +184,13 @@ class DeviceUIPlugin {
         this.routes = null;
     }
 
-    setRoutes(df_routes) { this.routes = df_routes; }
+    setRoutes(df_routes) {
+        this.routes = df_routes;
+        if (this.device_view.circles_group) {
+            this.device_view.resetCircleStyles();
+            this.device_view.styleRoutes(this.routes.groupBy("route_i"));
+        }
+    }
 
     setDevice(device) {
         this.device = device;
@@ -192,6 +198,11 @@ class DeviceUIPlugin {
                                         .df_shapes);
         styleShapes(shapes);
         this.device_view.setShapes(shapes);
+
+        var min_median_extent = _.min(_.values(device.median_size));
+        var radius = .5 * .5 * min_median_extent;
+        this.device_view.setCircles(f_circles(radius)(this.device_view
+                                                      .shapeCenters));
     }
 
     listen(zmq_uri) {
@@ -324,6 +335,16 @@ class Device {
         this.electrode_bounds = _.mapValues(this.df_shapes.groupBy("id"),
                                             (df_i) =>
                                             boundingBox(df_i.get(["x", "y"])));
+
+        /******************************************************************************
+        * **TODO** The following functions require ``device_ui_plugin.device_view``.
+        *****************************************************************************/
+        /*
+         * Set radius of circles based on minimum of median x/median y
+         * electrode size.
+         */
+        this.median_size = _.mapValues(f_sizes(this.electrode_bounds),
+                                       getMedian);
     }
 }
 
@@ -374,6 +395,45 @@ class DeviceView {
             this.mouseHandler.unbind();
         }
     }
+
+    setCircles(circles) {
+        this.circles = circles;
+
+        this.circles_group = new THREE.Group();
+        _.forEach(circles, (v) => this.circles_group.add(v));
+        this.circles_group.position.z =
+            1.1 * this.shapes.parentGroup.position.z;
+        this.threePlane.scene.add(this.circles_group);
+    }
+
+    resetCircles() {
+        if (this.circles_group) {
+            this.threePlane.scene.remove(this.circles_group);
+            this.circles_group = null;
+            this.circles = null;
+        }
+    }
+
+    resetCircleStyles() {
+        f_set_attr_properties(this.circles_group.children, "material",
+                              {opacity: 0, color: COLORS["light blue"]});
+        f_set_attr_properties(this.circles_group.children, "scale",
+                              {x: 1, y: 1, z: 1});
+    }
+
+    // **TODO** The following function requires ``circles`` mesh map to exist.
+    styleRoutes(routes) {
+        _fp.forEach((df_i) =>
+            _.forEach(_.at(this.circles, df_i.get("electrode_i")),
+                    (mesh_i, i) => {
+                        var s = i / df_i.size;
+                        mesh_i.material.color = COLORS["green"];
+                        mesh_i.material.opacity = 0.4 + .6 * s;
+                        mesh_i.scale.x = .5 + .5 * s;
+                        mesh_i.scale.y = .5 + .5 * s;
+                    }))(routes);
+    }
+        //device_ui_plugin.routes.groupBy("route_i"),
 
     setShapes(shapes) {
         this.resetShapes();
