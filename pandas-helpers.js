@@ -137,6 +137,22 @@ class DataFrame {
     return data_frame_to_js(this);
   }
 
+  get(column) {
+    if (_.isArray(column)) {
+      // Multiple columns were specified.
+      var columns = column;
+      // Get array of values for each column.
+      var values_i = _.unzip(_fp.map(_fp.at(columns))(this._df));
+      // Return a mapping from each column key to an ``Array`` of values for
+      // the column.
+      return _.zipObject(columns, values_i);
+    } else {
+      // A single column was specified.
+      // Return an ``Array`` of values for the column.
+      return _fp.map(_fp.get(column))(this._df);
+    }
+  }
+
   pick(columns) {
     if (!_.isArray(columns)) { columns = [columns]; }
     var df_i = _.clone(this);
