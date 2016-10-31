@@ -298,6 +298,28 @@ class Device {
             _.mapValues(this.df_electrode_channels
                         .groupRecordsBy("electrode_id"),
                         _fp.map(_fp.get("channel")));
+
+        function boundingBox(xy_arrays) {
+          function bounds(data) {
+            var funcs = ["min", "max", "mean"];
+            var result = _.zipObject(funcs, _.map(funcs, (f_ij) =>
+                                                  _[f_ij](data)));
+            result["length"] = result["max"] - result["min"];
+            return result;
+          }
+          var f_xy_bounds = _fp.pipe(_fp.mapValues(bounds), _fp.at(["x", "y"]),
+                                     _fp.zipObject(["x", "y"]));
+          var xy_bounds = f_xy_bounds(xy_arrays);
+          return {"x": xy_bounds.x.min, "x_center": xy_bounds.x.mean,
+                  "width": xy_bounds.x.length,
+                  "y": xy_bounds.y.min, "y_center": xy_bounds.y.mean,
+                  "height": xy_bounds.y.length};
+        }
+
+        // Compute bounding box (including center) of each electrode shape.
+        this.electrode_bounds = _.mapValues(this.df_shapes.groupBy("id"),
+                                            (df_i) =>
+                                            boundingBox(df_i.get(["x", "y"])));
     }
 }
 
