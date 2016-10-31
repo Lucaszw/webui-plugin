@@ -383,6 +383,46 @@ class DataFrame {
                                            columns)))(this.values);
     return _fp.mapValues(_fp.map(_fp.zipObject(this.columns)))(groups_i);
   }
+
+  groupBy(columns=null) {
+    /*
+     * Parameters
+     * ----------
+     * columns, optional : string or Array
+     *     Column(s) to group rows by.
+     *
+     * Returns
+     * -------
+     * Object
+     *     Mapping from each **group key** to a **``DataFrame``** only
+     *     containing rows where ``columns`` match corresponding group value.
+     *
+     * See also
+     * --------
+     * `meth:groupRecordsBy`
+     */
+    // Append index value to each row.
+    var valueColumns = _.unzip(this.values);
+    var columns_i = _.concat([this.index.slice()], valueColumns);
+    var rows_i = _.unzip(columns_i);
+
+    columns = columns || this.columns;
+    // Modify column positions to account for index column.
+    var columnPositions_i = _.mapValues(this.columnPositions, _fp.add(1));
+    var selectedPositions_i = _fp.at(columns)(columnPositions_i);
+
+    // Sort rows (including index values) according to specified columns.
+    var groups_i = _.groupBy(rows_i, _fp.at(selectedPositions_i));
+
+    return _.mapValues(groups_i, (v, k) => {
+        // Return new data frame with new row/index order.
+        var df_i = _.clone(this);
+        columns_i = _.unzip(v);
+        df_i.index = columns_i[0];
+        df_i.values = _.unzip(columns_i.slice(1, columns_i.length));
+        return new DataFrame(df_i);
+    });
+  }
 }
 
 
