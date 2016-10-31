@@ -181,7 +181,10 @@ class DeviceUIPlugin {
         this.device_view = deviceView;
         this.socket = null;
         this.device = null;
+        this.routes = null;
     }
+
+    set_routes(df_routes) { this.routes = df_routes; }
 
     listen(zmq_uri) {
         this.socket = io.connect(zmq_uri);
@@ -257,6 +260,8 @@ class DeviceUIPlugin {
                                     "get_routes");
                     } else if (msg['content']['command'] == 'get_routes') {
                         data = ZmqPlugin.decode_content_data(msg);
+                        var df_routes = new DataFrame(data);
+                        this.set_routes(df_routes);
                         console.log("on_routes_set", data);
                     }
                 } else {
