@@ -287,17 +287,17 @@ class Device {
         var setY = _.curry(_.set)(_, y_column);
         var max_y = _.max(_fp.map(getY)(this.df_shapes.values));
         var flipY = _fp.map((row) => setY(_.clone(row),
-                                            max_y - getY(row)));
+                                          max_y - getY(row)));
         this.df_shapes.values = flipY(this.df_shapes.values);
 
         this.electrode_ids_by_channel = _.map(this.df_electrode_channels
-                                              .groupBy("channel"),
+                                              .groupRecordsBy("channel"),
                                               _fp.map(_fp
                                                       .get("electrode_id")));
-        this.channels_by_electrode_id = _.mapValues(this.df_electrode_channels
-                                                    .groupBy("electrode_id"),
-                                                    _fp.map(_fp
-                                                            .get("channel")));
+        this.channels_by_electrode_id =
+            _.mapValues(this.df_electrode_channels
+                        .groupRecordsBy("electrode_id"),
+                        _fp.map(_fp.get("channel")));
     }
 }
 

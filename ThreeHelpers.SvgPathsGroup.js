@@ -202,7 +202,8 @@ ThreeHelpers.shapesById = function(df_i) {
      */
     return _fp.mapValues(_fp.flow(_fp.sortBy("vertex_i"),
                                   ThreeHelpers
-                                  .verticesToShape))(df_i.groupBy("id"));
+                                  .verticesToShape))(df_i
+                                                     .groupRecordsBy("id"));
 }
 
 

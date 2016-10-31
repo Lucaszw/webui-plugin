@@ -361,7 +361,23 @@ class DataFrame {
     return new DataFrame(df_i);
   }
 
-  groupBy(columns=null) {
+  groupRecordsBy(columns=null) {
+    /*
+     * Parameters
+     * ----------
+     * columns, optional : string or Array
+     *     Column(s) to group rows by.
+     *
+     * Returns
+     * -------
+     * Object
+     *     Mapping from each **group key** to an **``Array`` of records** only
+     *     containing rows where ``columns`` match corresponding group value.
+     *
+     * See also
+     * --------
+     * `meth:groupBy`
+     */
     columns = columns || this.columns;
     var groups_i = _fp.groupBy(_fp.at(_.at(this.columnPositions,
                                            columns)))(this.values);
