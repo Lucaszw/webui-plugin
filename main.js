@@ -186,6 +186,14 @@ class DeviceUIPlugin {
 
     set_routes(df_routes) { this.routes = df_routes; }
 
+    setDevice(device) {
+        this.device = device;
+        var shapes = dataFrameToShapes(this.device
+                                        .df_shapes);
+        styleShapes(shapes);
+        this.device_view.setShapes(shapes);
+    }
+
     listen(zmq_uri) {
         this.socket = io.connect(zmq_uri);
 
@@ -225,11 +233,7 @@ class DeviceUIPlugin {
                             // Refresh local device configuration.
                             console.log("on_device_loaded", data);
                             // **TODO** Use `Device` class
-                            this.device = new Device(data);
-                            var shapes = dataFrameToShapes(this.device
-                                                           .df_shapes);
-                            styleShapes(shapes);
-                            this.device_view.setShapes(shapes);
+                            this.setDevice(new Device(data));
                         }
                     }
                 } else if ((source ==
