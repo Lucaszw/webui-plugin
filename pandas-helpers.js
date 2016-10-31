@@ -154,7 +154,7 @@ class DataFrame {
   }
 
   pick(columns) {
-    if (!_.isArray(columns)) { columns = [columns]; }
+    columns = _.castArray(columns);
     var df_i = _.clone(this);
     df_i.columns = columns;
     df_i.values = _fp.map(_fp.at(columns))(_fp.at(df_i.index)(df_i._df));
@@ -162,9 +162,7 @@ class DataFrame {
   }
 
   ix(index_values) {
-    if (!_.isArray(index_values)) {
-        index_values = [index_values];
-    }
+    index_values = _.castArray(index_values);
     var df_i = _.clone(this);
     df_i.index = index_values;
     df_i.values = _fp.map(_fp.at(df_i.columns))(_fp.at(df_i.index)(df_i._df));
@@ -172,7 +170,7 @@ class DataFrame {
   }
 
   iloc(positions) {
-    if (!_.isArray(positions)) { positions = [positions]; }
+    positions = _.castArray(positions);
     var df_i = _.clone(this);
     df_i.index = _fp.map(function (i) { return _.nth(df_i.index, i); })(positions);
     if (!(_.every(_fp.map(_.negate(_.isUndefined))(df_i.index)))) {
