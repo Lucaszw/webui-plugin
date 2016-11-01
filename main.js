@@ -10,11 +10,6 @@ var interpretPaths = _fp.mapValues((path) => two.interpret(path));
 var extractElectrodeStates = _fp.flow(_fp.at(["electrode_states.index",
                                               "electrode_states.values"]),
                                       _fp.spread(_.zipObject));
-var applyElectrodeStates = (_fp.forEach.convert({'cap': false})
-                            (function (value, key) {
-                                deviceView.shapes.shapeMeshes[key].material
-                                .opacity = (value) ? 0.7 : 0.3;
-                            }));
 
 /* Function: `computeMeshBoundingBoxes`
  *
@@ -114,7 +109,7 @@ function invertColor(shape) {
 
 
 function initStats() {
-    stats = new Stats();
+    var stats = new Stats();
     stats.setMode(0); // 0: fps, 1: ms
 
     // Align top-left
@@ -169,13 +164,7 @@ function centerVideo(threePlane, bbox) {
 }
 
 
-var stats;
-var orbit;
-var gl_element = $("#canvasID");
 var namespace;
-var socket;
-var threePlane;
-var deviceView;
 
 
 class DeviceUIPlugin {
@@ -184,6 +173,14 @@ class DeviceUIPlugin {
         this.socket = null;
         this.device = null;
         this.routes = null;
+    }
+
+    applyElectrodeStates(states) {
+        return (_fp.forEach.convert({'cap': false})
+                ((value, key) => {
+                    this.device_view.shapes.shapeMeshes[key].material.opacity =
+                        (value) ? 0.7 : 0.3;
+                 }))(states);
     }
 
     setRoutes(df_routes) {
@@ -256,14 +253,16 @@ class DeviceUIPlugin {
                         // The state of one or more electrodes has changed.
                         data = ZmqPlugin.decode_content_data(msg);
                         console.log("on_electrode_states_updated", data);
-                        applyElectrodeStates(extractElectrodeStates(data));
+                        var electrode_states = extractElectrodeStates(data);
+                        this.applyElectrodeStates(electrode_states);
                     } else if (msg['content']['command'] ==
                             'get_channel_states') {
                         // A plugin has requested the state of all
                         // channels/electrodes.
                         data = ZmqPlugin.decode_content_data(msg);
                         console.log("on_electrode_states_set", data);
-                        applyElectrodeStates(extractElectrodeStates(data));
+                        var electrode_states = extractElectrodeStates(data);
+                        this.applyElectrodeStates(electrode_states);
                     } else {
                         console.log('wheelerlab.electrode_controller_plugin',
                                     data);
@@ -360,9 +359,8 @@ class DeviceView {
 
         // Create orbit controls to zoom, pan, etc.  Start at center of SVG
         // drawing.
-        this.orbit = new THREE.OrbitControls(this.threePlane.camera,
-                                             this.threePlane.renderer
-                                             .domElement);
+        this.orbit = new OrbitControls(this.threePlane.camera,
+                                       this.threePlane.renderer.domElement);
         this.orbit.reset();
         this.orbit.enableRotate = false;
 

@@ -24,8 +24,8 @@
             var device_ui_plugin;
             $(window).on("load", function () {
                 // Create three.js scene, stats widget, and video (webcam) plane.
-                deviceView = new DeviceView($("#canvasID")[0],
-                                            $("#controlHandles")[0]);
+                var deviceView = new DeviceView($("#canvasID")[0],
+                                                $("#controlHandles")[0]);
 
                 // Change to an empty string to use the global namespace.
                 namespace = '/zmq_plugin';
@@ -62,25 +62,24 @@
                 temp(deviceView.menu);
 
                 deviceView.on("shapes-set", function (shapes) {
-                    deviceView.mouseHandler.on(
-                        "clicked", function (x, y, intersects) {
-                            var intersection = intersects[0];
-                            var mesh = intersection.object;
-                            var scenePoint = intersection.point;
+                  deviceView.mouseHandler.on(
+                    "clicked", function (x, y, intersects) {
+                      var intersection = intersects[0];
+                      var mesh = intersection.object;
+                      var scenePoint = intersection.point;
 
-                            // Send request to toggle state of clicked
-                            // electrodes.
-                            var request =
-                                {"args":
-                                 ["wheelerlab.electrode_controller_plugin",
-                                 "set_electrode_state"],
-                                 "kwargs":
-                                 {electrode_id: mesh.shape_id,
-                                  state: !(mesh.material.opacity > .5)}};
-                            device_ui_plugin.socket.emit("execute", request);
+                      // Send request to toggle state of clicked electrodes.
+                      var request =
+                        {"args":
+                         ["wheelerlab.electrode_controller_plugin",
+                          "set_electrode_state"],
+                         "kwargs":
+                         {electrode_id: mesh.shape_id,
+                          state: !(mesh.material.opacity > .5)}};
+                      device_ui_plugin.socket.emit("execute", request);
 
-                            console.log(mesh.shape_id, scenePoint);
-                    });
+                      console.log(mesh.shape_id, scenePoint);
+                  });
                 });
             });
         </script>
