@@ -1,3 +1,5 @@
+var two = two || new Two({type: Two.Types['svg']});
+
 // Create function to extract the filled mesh for each shape.
 var shapeMeshes = _fp.mapValues(_fp.get("children[0]"));
 var shapeMeshesFromArray = _fp.map(_fp.get("children[0]"));
@@ -54,7 +56,7 @@ var computeCenters = _fp.mapValues(function (bbox_i) {
 
 function dataFrameToShapes(df_i) {
     // Compute boundary containing all shapes.
-    var boundingBox_i = boundingBox(df_i);
+    var boundingBox_i = ThreeHelpers.boundingBox(df_i);
     // Create a `THREE.Shape` for each shape (i.e., "id") in `df_i` frame.
     var shapes = ThreeHelpers.shapesById(df_i);
     var wrappedShapes = wrapShapes(shapes);
@@ -66,11 +68,11 @@ function dataFrameToShapes(df_i) {
 function wrapShapes(shapes) {
     // Create a `THREE.Group` for each shape, containing a filled mesh and an
     // outline.
-    var shapeGroups = _.mapValues(shapes, _.unary(shapeGroup));
+    var shapeGroups = _.mapValues(shapes, _.unary(ThreeHelpers.shapeGroup));
     // Create a parent group to hold all `THREE.Group` shape objects.
     var parentGroup = new THREE.Group();
     // Add all shape groups to single parent group.
-    _.forEach(shapeGroups, function (value, key) { parentGroup.add(value); });
+    _.forEach(shapeGroups, (shape_mesh) => parentGroup.add(shape_mesh));
     // Extract `Array` containing the filled mesh for each shape.
     var shapeMeshes_i = shapeMeshes(shapeGroups);
 
@@ -201,8 +203,8 @@ class DeviceUIPlugin {
 
         var min_median_extent = _.min(_.values(device.median_size));
         var radius = .5 * .5 * min_median_extent;
-        this.device_view.setCircles(f_circles(radius)(this.device_view
-                                                      .shapeCenters));
+        this.device_view.setCircles(ThreeHelpers.f_circles(radius)
+                                    (this.device_view.shapeCenters));
     }
 
     listen(zmq_uri) {
@@ -341,8 +343,9 @@ class Device {
          * Set radius of circles based on minimum of median x/median y
          * electrode size.
          */
-        this.median_size = _.mapValues(f_sizes(this.electrode_bounds),
-                                       getMedian);
+        this.median_size = _.mapValues(ThreeHelpers.f_sizes(this
+                                                            .electrode_bounds),
+                                       ThreeHelpers.getMedian);
     }
 }
 
@@ -413,10 +416,12 @@ class DeviceView {
     }
 
     resetCircleStyles() {
-        f_set_attr_properties(this.circles_group.children, "material",
-                              {opacity: 0, color: COLORS["light blue"]});
-        f_set_attr_properties(this.circles_group.children, "scale",
-                              {x: 1, y: 1, z: 1});
+        ThreeHelpers.f_set_attr_properties(this.circles_group.children,
+                                           "material",
+                                           {opacity: 0, color: ThreeHelpers
+                                            .COLORS["light blue"]});
+        ThreeHelpers.f_set_attr_properties(this.circles_group.children,
+                                           "scale", {x: 1, y: 1, z: 1});
     }
 
     styleRoutes(routes) {
@@ -424,7 +429,7 @@ class DeviceView {
             _.forEach(_.at(this.circles, df_i.get("electrode_i")),
                     (mesh_i, i) => {
                         var s = i / df_i.size;
-                        mesh_i.material.color = COLORS["green"];
+                        mesh_i.material.color = ThreeHelpers.COLORS["green"];
                         mesh_i.material.opacity = 0.4 + .6 * s;
                         mesh_i.scale.x = .5 + .5 * s;
                         mesh_i.scale.y = .5 + .5 * s;
@@ -448,7 +453,7 @@ class DeviceView {
                     camera: this.threePlane.camera};
         // Create event manager to translate mouse movement and presses
         // high-level shape events.
-        this.mouseHandler = new ThreeHelpers.MouseEventHandler(args);
+        this.mouseHandler = new MouseEventHandler(args);
 
         // Notify that the shapes have been set.
         this.trigger("shapes-set", shapes);
