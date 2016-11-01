@@ -133,6 +133,10 @@ class DataFrame {
                                              _.range(this.columns.length)));
   }
 
+  to_records() {
+    return data_frame_to_js(this);
+  }
+
   pick(columns) {
     if (!_.isArray(columns)) { columns = [columns]; }
     var df_i = _.clone(this);
