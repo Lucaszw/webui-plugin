@@ -173,6 +173,11 @@ class DeviceUIPlugin {
         this.socket = null;
         this.device = null;
         this.routes = null;
+
+        this.route_material = new THREE.ShaderMaterial(
+            THREELine2d.BasicShader({side: THREE.DoubleSide,
+                                     diffuse: 0x5cd7ff,
+                                     thickness: 0.3}));
     }
 
     applyElectrodeStates(states) {
@@ -188,6 +193,20 @@ class DeviceUIPlugin {
         if (this.device_view.circles_group) {
             this.device_view.resetCircleStyles();
             this.device_view.styleRoutes(this.routes.groupBy("route_i"));
+
+            var f_route_geometries =
+                (centers) => _fp.map((df_i) =>
+                    THREELine2d.Line(_.map(_.at(centers,
+                                           df_i.get("electrode_i")),
+                                           _fp.at(["x", "y"]))));
+            var route_geometries =
+                f_route_geometries(this.device_view.shapeCenters)
+                (this.routes.groupBy("route_i"));
+            var route_meshes = _.map(route_geometries,
+                                     (geom) =>
+                                     new THREE.Mesh(geom,
+                                                    this.route_material));
+            this.device_view.setRoutes(route_meshes);
         }
     }
 
@@ -394,6 +413,25 @@ class DeviceView {
         if (this.mouseHandler) {
             // Unbind any attached mouse event handlers.
             this.mouseHandler.unbind();
+        }
+    }
+
+    setRoutes(routes) {
+        this.routes = routes;
+
+        this.resetRoutes();
+        this.routes_group = new THREE.Group();
+        _.forEach(routes, (v) => this.routes_group.add(v));
+        this.routes_group.position.z =
+            1.05 * this.shapes.parentGroup.position.z;
+        this.threePlane.scene.add(this.routes_group);
+    }
+
+    resetRoutes() {
+        if (this.routes_group) {
+            this.threePlane.scene.remove(this.routes_group);
+            this.routes_group = null;
+            this.routes = null;
         }
     }
 
