@@ -243,7 +243,6 @@ class DeviceUIPlugin {
                         if (data) {
                             // Refresh local device configuration.
                             console.log("on_device_loaded", data);
-                            // **TODO** Use `Device` class
                             this.setDevice(new Device(data));
                         }
                     }
@@ -336,9 +335,6 @@ class Device {
                                             (df_i) =>
                                             boundingBox(df_i.get(["x", "y"])));
 
-        /******************************************************************************
-        * **TODO** The following functions require ``device_ui_plugin.device_view``.
-        *****************************************************************************/
         /*
          * Set radius of circles based on minimum of median x/median y
          * electrode size.
@@ -421,7 +417,6 @@ class DeviceView {
                               {x: 1, y: 1, z: 1});
     }
 
-    // **TODO** The following function requires ``circles`` mesh map to exist.
     styleRoutes(routes) {
         _fp.forEach((df_i) =>
             _.forEach(_.at(this.circles, df_i.get("electrode_i")),
@@ -433,7 +428,6 @@ class DeviceView {
                         mesh_i.scale.y = .5 + .5 * s;
                     }))(routes);
     }
-        //device_ui_plugin.routes.groupBy("route_i"),
 
     setShapes(shapes) {
         this.resetShapes();
