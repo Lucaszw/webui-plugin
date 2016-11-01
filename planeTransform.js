@@ -4,7 +4,7 @@ class planeTransform{
         //if two points are the same, the texture disappears
         //plane jumps to other side
         this.frame = 0;
-        this.displayHandles = true;
+        this.displayHandles = false;
         this.prevDisplayHandles = true;
         this.updatePos = true;
         this.canvas_element = canvas_element;
