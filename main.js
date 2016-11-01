@@ -214,6 +214,8 @@ class DeviceUIPlugin {
         }
         this.device_view.menu.add(this, 'refresh_device');
 
+        this.socket.on('connect', (msg) => this.refresh_device());
+
         this.socket.on('connect_error', (msg) => this.socket.close());
 
         this.socket.on('execute_reply', (msg) => {
