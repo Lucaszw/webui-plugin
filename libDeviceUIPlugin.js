@@ -1,4 +1,81 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
+'use strict';
+const numeric = require("numeric");
+
+
+function round(num){
+    return Math.round(num*10000000000)/10000000000;
+}
+
+function getNormalizationCoefficients(srcPts, dstPts, isInverse){
+    if(isInverse){
+        var tmp = dstPts;
+        dstPts = srcPts;
+        srcPts = tmp;
+    }
+    var r1 = [srcPts[0], srcPts[1], 1, 0, 0, 0, -1*dstPts[0]*srcPts[0], -1*dstPts[0]*srcPts[1]];
+    var r2 = [0, 0, 0, srcPts[0], srcPts[1], 1, -1*dstPts[1]*srcPts[0], -1*dstPts[1]*srcPts[1]];
+    var r3 = [srcPts[2], srcPts[3], 1, 0, 0, 0, -1*dstPts[2]*srcPts[2], -1*dstPts[2]*srcPts[3]];
+    var r4 = [0, 0, 0, srcPts[2], srcPts[3], 1, -1*dstPts[3]*srcPts[2], -1*dstPts[3]*srcPts[3]];
+    var r5 = [srcPts[4], srcPts[5], 1, 0, 0, 0, -1*dstPts[4]*srcPts[4], -1*dstPts[4]*srcPts[5]];
+    var r6 = [0, 0, 0, srcPts[4], srcPts[5], 1, -1*dstPts[5]*srcPts[4], -1*dstPts[5]*srcPts[5]];
+    var r7 = [srcPts[6], srcPts[7], 1, 0, 0, 0, -1*dstPts[6]*srcPts[6], -1*dstPts[6]*srcPts[7]];
+    var r8 = [0, 0, 0, srcPts[6], srcPts[7], 1, -1*dstPts[7]*srcPts[6], -1*dstPts[7]*srcPts[7]];
+
+    var matA = [r1, r2, r3, r4, r5, r6, r7, r8];
+    var matB = dstPts;
+    var matC;
+
+    try{
+        matC = numeric.inv(numeric.dotMMsmall(numeric.transpose(matA), matA));
+    }catch(e){
+        console.log(e);
+        return [1,0,0,0,1,0,0,0];
+    }
+
+    var matD = numeric.dotMMsmall(matC, numeric.transpose(matA));
+    var matX = numeric.dotMV(matD, matB);
+    for(var i = 0; i < matX.length; i++) {
+        matX[i] = round(matX[i]);
+    }
+    matX[8] = 1;
+
+    return matX;
+}
+
+function PerspT(srcPts, dstPts){
+    if( (typeof window !== 'undefined' && window === this) || this === undefined) {
+        return new PerspT(srcPts, dstPts);
+    }
+
+    this.srcPts = srcPts;
+    this.dstPts = dstPts;
+    this.coeffs = getNormalizationCoefficients(this.srcPts, this.dstPts, false);
+    this.coeffsInv = getNormalizationCoefficients(this.srcPts, this.dstPts, true);
+
+    return this;
+}
+
+PerspT.prototype = {
+    transform: function(x,y) {
+        var coordinates = [];
+        coordinates[0] = (this.coeffs[0]*x + this.coeffs[1]*y + this.coeffs[2]) / (this.coeffs[6]*x + this.coeffs[7]*y + 1);
+        coordinates[1] = (this.coeffs[3]*x + this.coeffs[4]*y + this.coeffs[5]) / (this.coeffs[6]*x + this.coeffs[7]*y + 1);
+        return coordinates;
+    },
+
+    transformInverse: function(x,y) {
+        var coordinates = [];
+        coordinates[0] = (this.coeffsInv[0]*x + this.coeffsInv[1]*y + this.coeffsInv[2]) / (this.coeffsInv[6]*x + this.coeffsInv[7]*y + 1);
+        coordinates[1] = (this.coeffsInv[3]*x + this.coeffsInv[4]*y + this.coeffsInv[5]) / (this.coeffsInv[6]*x + this.coeffsInv[7]*y + 1);
+        return coordinates;
+    }
+};
+
+
+module.exports = PerspT;
+
+},{"numeric":88}],2:[function(require,module,exports){
 const _ = require("lodash");
 const Backbone = require("backbone");
 
@@ -105,7 +182,7 @@ module.exports = (THREE) => function MouseEventHandler(options) {
     _.extend(self, Backbone.Events);
 };
 
-},{"backbone":12,"lodash":83}],2:[function(require,module,exports){
+},{"backbone":13,"lodash":84}],3:[function(require,module,exports){
 const Two = require('two');
 const _ = require('lodash');
 
@@ -407,7 +484,7 @@ module.exports = (THREE) => {
     return ThreeHelpers;
 }
 
-},{"lodash":83,"two":3}],3:[function(require,module,exports){
+},{"lodash":84,"two":4}],4:[function(require,module,exports){
 (function (global){
 ; var __browserify_shim_require__=require;(function browserifyShim(module, exports, require, define, browserify_shim__define__module__export__) {
 (function(){function e(a){return function(d,c,f,q){c=j(c,q,4);var e=!C(d)&&g.keys(d),h=(e||d).length,l=0<a?0:h-1;3>arguments.length&&(f=d[e?e[l]:l],l+=a);for(var s=c,t=f;0<=l&&l<h;l+=a)var B=e?e[l]:l,t=s(t,d[B],B,d);return t}}function h(a){return function(d,g,c){g=x(g,c);c=A(d);for(var f=0<a?0:c-1;0<=f&&f<c;f+=a)if(g(d[f],f,d))return f;return-1}}function p(a,d,c){return function(q,e,j){var h=0,l=A(q);if("number"==typeof j)0<a?h=0<=j?j:Math.max(j+l,h):l=0<=j?Math.min(j+1,l):j+l+1;else if(c&&j&&l)return j=
@@ -623,7 +700,7 @@ this.Backbone,"function"===typeof require&&!("function"===typeof define&&define.
 }).call(global, undefined, undefined, undefined, undefined, function defineExport(ex) { module.exports = ex; });
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],4:[function(require,module,exports){
+},{}],5:[function(require,module,exports){
 const Backbone = require("backbone");
 const _ = require("lodash");
 const d3 = require("d3");
@@ -713,7 +790,7 @@ module.exports = function ControlPointsUI() {
     return my;
 };
 
-},{"backbone":12,"d3":26,"lodash":83}],5:[function(require,module,exports){
+},{"backbone":13,"d3":27,"lodash":84}],6:[function(require,module,exports){
 var inherits = require('inherits');
 var getNormals = require('polyline-normals');
 var VERTS_PER_POINT = 2;
@@ -847,7 +924,7 @@ module.exports = function createLineMesh (THREE) {
   return LineMesh;
 };
 
-},{"inherits":75,"polyline-normals":93}],6:[function(require,module,exports){
+},{"inherits":76,"polyline-normals":94}],7:[function(require,module,exports){
 function clone(point) { //TODO: use gl-vec2 for this
     return [point[0], point[1]]
 }
@@ -1046,9 +1123,9 @@ module.exports = function createBezierBuilder(opt) {
     }
 }
 
-},{}],7:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 module.exports = require('./function')()
-},{"./function":6}],8:[function(require,module,exports){
+},{"./function":7}],9:[function(require,module,exports){
 module.exports = after
 
 function after(count, callback, err_cb) {
@@ -1078,7 +1155,7 @@ function after(count, callback, err_cb) {
 
 function noop() {}
 
-},{}],9:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 //if 'steps' is not specified, we'll just approximate it
 module.exports = function arc(x, y, radius, start, end, clockwise, steps, path) {
     if (!path)
@@ -1124,7 +1201,7 @@ module.exports = function arc(x, y, radius, start, end, clockwise, steps, path) 
     }
     return path
 }
-},{}],10:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 /**
  * An abstraction for slicing an arraybuffer even when
  * ArrayBuffer.prototype.slice is not supported
@@ -1155,13 +1232,13 @@ module.exports = function(arraybuffer, start, end) {
   return result.buffer;
 };
 
-},{}],11:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 module.exports = function numtype(num, def) {
 	return typeof num === 'number'
 		? num 
 		: (typeof def === 'number' ? def : 0)
 }
-},{}],12:[function(require,module,exports){
+},{}],13:[function(require,module,exports){
 (function (global){
 //     Backbone.js 1.3.3
 
@@ -3085,7 +3162,7 @@ module.exports = function numtype(num, def) {
 });
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"jquery":77,"underscore":108}],13:[function(require,module,exports){
+},{"jquery":78,"underscore":109}],14:[function(require,module,exports){
 
 /**
  * Expose `Backoff`.
@@ -3172,7 +3249,7 @@ Backoff.prototype.setJitter = function(jitter){
 };
 
 
-},{}],14:[function(require,module,exports){
+},{}],15:[function(require,module,exports){
 /*
  * base64-arraybuffer
  * https://github.com/niklasvh/base64-arraybuffer
@@ -3241,7 +3318,7 @@ Backoff.prototype.setJitter = function(jitter){
   };
 })();
 
-},{}],15:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
 (function (global){
 /**
  * Create a blob builder even when vendor prefixes exist
@@ -3341,7 +3418,7 @@ module.exports = (function() {
 })();
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],16:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 'use strict'
 
 module.exports = findBounds
@@ -3364,9 +3441,9 @@ function findBounds(points) {
   }
   return [lo, hi]
 }
-},{}],17:[function(require,module,exports){
-
 },{}],18:[function(require,module,exports){
+
+},{}],19:[function(require,module,exports){
 // CodeMirror, copyright (c) by Marijn Haverbeke and others
 // Distributed under an MIT license: http://codemirror.net/LICENSE
 
@@ -12462,7 +12539,7 @@ CodeMirror.version = "5.20.2"
 return CodeMirror;
 
 })));
-},{}],19:[function(require,module,exports){
+},{}],20:[function(require,module,exports){
 // CodeMirror, copyright (c) by Marijn Haverbeke and others
 // Distributed under an MIT license: http://codemirror.net/LICENSE
 
@@ -13289,7 +13366,7 @@ CodeMirror.defineMode("css", function(config, parserConfig) {
 
 });
 
-},{"../../lib/codemirror":18}],20:[function(require,module,exports){
+},{"../../lib/codemirror":19}],21:[function(require,module,exports){
 // CodeMirror, copyright (c) by Marijn Haverbeke and others
 // Distributed under an MIT license: http://codemirror.net/LICENSE
 
@@ -13443,7 +13520,7 @@ CodeMirror.defineMode("css", function(config, parserConfig) {
   CodeMirror.defineMIME("text/html", "htmlmixed");
 });
 
-},{"../../lib/codemirror":18,"../css/css":19,"../javascript/javascript":21,"../xml/xml":22}],21:[function(require,module,exports){
+},{"../../lib/codemirror":19,"../css/css":20,"../javascript/javascript":22,"../xml/xml":23}],22:[function(require,module,exports){
 // CodeMirror, copyright (c) by Marijn Haverbeke and others
 // Distributed under an MIT license: http://codemirror.net/LICENSE
 
@@ -14229,7 +14306,7 @@ CodeMirror.defineMIME("application/typescript", { name: "javascript", typescript
 
 });
 
-},{"../../lib/codemirror":18}],22:[function(require,module,exports){
+},{"../../lib/codemirror":19}],23:[function(require,module,exports){
 // CodeMirror, copyright (c) by Marijn Haverbeke and others
 // Distributed under an MIT license: http://codemirror.net/LICENSE
 
@@ -14625,7 +14702,7 @@ if (!CodeMirror.mimeModes.hasOwnProperty("text/html"))
 
 });
 
-},{"../../lib/codemirror":18}],23:[function(require,module,exports){
+},{"../../lib/codemirror":19}],24:[function(require,module,exports){
 /**
  * Slice reference.
  */
@@ -14650,7 +14727,7 @@ module.exports = function(obj, fn){
   }
 };
 
-},{}],24:[function(require,module,exports){
+},{}],25:[function(require,module,exports){
 
 /**
  * Expose `Emitter`.
@@ -14813,7 +14890,7 @@ Emitter.prototype.hasListeners = function(event){
   return !! this.listeners(event).length;
 };
 
-},{}],25:[function(require,module,exports){
+},{}],26:[function(require,module,exports){
 
 module.exports = function(a, b){
   var fn = function(){};
@@ -14821,7 +14898,7 @@ module.exports = function(a, b){
   a.prototype = new fn;
   a.prototype.constructor = a;
 };
-},{}],26:[function(require,module,exports){
+},{}],27:[function(require,module,exports){
 !function() {
   var d3 = {
     version: "3.5.17"
@@ -24376,7 +24453,7 @@ module.exports = function(a, b){
   });
   if (typeof define === "function" && define.amd) this.d3 = d3, define(d3); else if (typeof module === "object" && module.exports) module.exports = d3; else this.d3 = d3;
 }();
-},{}],27:[function(require,module,exports){
+},{}],28:[function(require,module,exports){
 
 /**
  * This is the web browser implementation of `debug()`.
@@ -24546,7 +24623,7 @@ function localstorage(){
   } catch (e) {}
 }
 
-},{"./debug":28}],28:[function(require,module,exports){
+},{"./debug":29}],29:[function(require,module,exports){
 
 /**
  * This is the common logic for both the Node.js and web browser
@@ -24745,11 +24822,11 @@ function coerce(val) {
   return val;
 }
 
-},{"ms":85}],29:[function(require,module,exports){
+},{"ms":86}],30:[function(require,module,exports){
 
 module.exports = require('./lib/index');
 
-},{"./lib/index":30}],30:[function(require,module,exports){
+},{"./lib/index":31}],31:[function(require,module,exports){
 
 module.exports = require('./socket');
 
@@ -24761,7 +24838,7 @@ module.exports = require('./socket');
  */
 module.exports.parser = require('engine.io-parser');
 
-},{"./socket":31,"engine.io-parser":40}],31:[function(require,module,exports){
+},{"./socket":32,"engine.io-parser":41}],32:[function(require,module,exports){
 (function (global){
 /**
  * Module dependencies.
@@ -25496,7 +25573,7 @@ Socket.prototype.filterUpgrades = function (upgrades) {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./transport":32,"./transports/index":33,"component-emitter":39,"debug":27,"engine.io-parser":40,"indexof":74,"parsejson":89,"parseqs":90,"parseuri":91}],32:[function(require,module,exports){
+},{"./transport":33,"./transports/index":34,"component-emitter":40,"debug":28,"engine.io-parser":41,"indexof":75,"parsejson":90,"parseqs":91,"parseuri":92}],33:[function(require,module,exports){
 /**
  * Module dependencies.
  */
@@ -25653,7 +25730,7 @@ Transport.prototype.onClose = function () {
   this.emit('close');
 };
 
-},{"component-emitter":39,"engine.io-parser":40}],33:[function(require,module,exports){
+},{"component-emitter":40,"engine.io-parser":41}],34:[function(require,module,exports){
 (function (global){
 /**
  * Module dependencies
@@ -25710,7 +25787,7 @@ function polling (opts) {
 }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./polling-jsonp":34,"./polling-xhr":35,"./websocket":37,"xmlhttprequest-ssl":38}],34:[function(require,module,exports){
+},{"./polling-jsonp":35,"./polling-xhr":36,"./websocket":38,"xmlhttprequest-ssl":39}],35:[function(require,module,exports){
 (function (global){
 
 /**
@@ -25945,7 +26022,7 @@ JSONPPolling.prototype.doWrite = function (data, fn) {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./polling":36,"component-inherit":25}],35:[function(require,module,exports){
+},{"./polling":37,"component-inherit":26}],36:[function(require,module,exports){
 (function (global){
 /**
  * Module requirements.
@@ -26366,7 +26443,7 @@ function unloadHandler () {
 }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./polling":36,"component-emitter":39,"component-inherit":25,"debug":27,"xmlhttprequest-ssl":38}],36:[function(require,module,exports){
+},{"./polling":37,"component-emitter":40,"component-inherit":26,"debug":28,"xmlhttprequest-ssl":39}],37:[function(require,module,exports){
 /**
  * Module dependencies.
  */
@@ -26613,7 +26690,7 @@ Polling.prototype.uri = function () {
   return schema + '://' + (ipv6 ? '[' + this.hostname + ']' : this.hostname) + port + this.path + query;
 };
 
-},{"../transport":32,"component-inherit":25,"debug":27,"engine.io-parser":40,"parseqs":90,"xmlhttprequest-ssl":38,"yeast":111}],37:[function(require,module,exports){
+},{"../transport":33,"component-inherit":26,"debug":28,"engine.io-parser":41,"parseqs":91,"xmlhttprequest-ssl":39,"yeast":112}],38:[function(require,module,exports){
 (function (global){
 /**
  * Module dependencies.
@@ -26891,7 +26968,7 @@ WS.prototype.check = function () {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../transport":32,"component-inherit":25,"debug":27,"engine.io-parser":40,"parseqs":90,"ws":17,"yeast":111}],38:[function(require,module,exports){
+},{"../transport":33,"component-inherit":26,"debug":28,"engine.io-parser":41,"parseqs":91,"ws":18,"yeast":112}],39:[function(require,module,exports){
 (function (global){
 // browser shim for xmlhttprequest module
 
@@ -26932,7 +27009,7 @@ module.exports = function (opts) {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"has-cors":73}],39:[function(require,module,exports){
+},{"has-cors":74}],40:[function(require,module,exports){
 
 /**
  * Expose `Emitter`.
@@ -27098,7 +27175,7 @@ Emitter.prototype.hasListeners = function(event){
   return !! this.listeners(event).length;
 };
 
-},{}],40:[function(require,module,exports){
+},{}],41:[function(require,module,exports){
 (function (global){
 /**
  * Module dependencies.
@@ -27711,7 +27788,7 @@ exports.decodePayloadAsBinary = function (data, binaryType, callback) {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./keys":41,"after":8,"arraybuffer.slice":10,"base64-arraybuffer":14,"blob":15,"has-binary":42,"wtf-8":110}],41:[function(require,module,exports){
+},{"./keys":42,"after":9,"arraybuffer.slice":11,"base64-arraybuffer":15,"blob":16,"has-binary":43,"wtf-8":111}],42:[function(require,module,exports){
 
 /**
  * Gets the keys for an object.
@@ -27732,7 +27809,7 @@ module.exports = Object.keys || function keys (obj){
   return arr;
 };
 
-},{}],42:[function(require,module,exports){
+},{}],43:[function(require,module,exports){
 (function (global){
 
 /*
@@ -27794,12 +27871,12 @@ function hasBinary(data) {
 }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"isarray":43}],43:[function(require,module,exports){
+},{"isarray":44}],44:[function(require,module,exports){
 module.exports = Array.isArray || function (arr) {
   return Object.prototype.toString.call(arr) == '[object Array]';
 };
 
-},{}],44:[function(require,module,exports){
+},{}],45:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -27982,7 +28059,7 @@ function recalculateHSV(color) {
 
 }
 
-},{"../utils/common.js":61,"./interpret.js":45,"./math.js":46,"./toString.js":47}],45:[function(require,module,exports){
+},{"../utils/common.js":62,"./interpret.js":46,"./math.js":47,"./toString.js":48}],46:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -28325,7 +28402,7 @@ function createInterpert() {
 
 }
 
-},{"../utils/common.js":61,"./toString.js":47}],46:[function(require,module,exports){
+},{"../utils/common.js":62,"./toString.js":48}],47:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -28426,7 +28503,7 @@ function math() {
   };
 }
 
-},{}],47:[function(require,module,exports){
+},{}],48:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -28463,7 +28540,7 @@ function toString(color) {
 
 }
 
-},{"../utils/common.js":61}],48:[function(require,module,exports){
+},{"../utils/common.js":62}],49:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -28547,7 +28624,7 @@ common.extend(
   }
 );
 
-},{"../dom/dom.js":59,"../utils/common.js":61,"./Controller.js":50}],49:[function(require,module,exports){
+},{"../dom/dom.js":60,"../utils/common.js":62,"./Controller.js":51}],50:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -28868,7 +28945,7 @@ function hueGradient(elem) {
   elem.style.cssText += 'background: linear-gradient(top,  #ff0000 0%,#ff00ff 17%,#0000ff 34%,#00ffff 50%,#00ff00 67%,#ffff00 84%,#ff0000 100%);'
 }
 
-},{"../color/Color.js":44,"../color/interpret.js":45,"../dom/dom.js":59,"../utils/common.js":61,"./Controller.js":50}],50:[function(require,module,exports){
+},{"../color/Color.js":45,"../color/interpret.js":46,"../dom/dom.js":60,"../utils/common.js":62,"./Controller.js":51}],51:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -29009,7 +29086,7 @@ common.extend(
 );
 
 
-},{"../utils/common.js":61,"../utils/escapeHtml.js":63}],51:[function(require,module,exports){
+},{"../utils/common.js":62,"../utils/escapeHtml.js":64}],52:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -29079,7 +29156,7 @@ common.extend(
 
 );
 
-},{"../dom/dom.js":59,"../utils/common.js":61,"./Controller.js":50}],52:[function(require,module,exports){
+},{"../dom/dom.js":60,"../utils/common.js":62,"./Controller.js":51}],53:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -29221,7 +29298,7 @@ function numDecimals(x) {
   }
 }
 
-},{"../utils/common.js":61,"./Controller.js":50}],53:[function(require,module,exports){
+},{"../utils/common.js":62,"./Controller.js":51}],54:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -29352,7 +29429,7 @@ function roundToDecimal(value, decimals) {
   return Math.round(value * tenTo) / tenTo;
 }
 
-},{"../dom/dom.js":59,"../utils/common.js":61,"./NumberController.js":52}],54:[function(require,module,exports){
+},{"../dom/dom.js":60,"../utils/common.js":62,"./NumberController.js":53}],55:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -29482,7 +29559,7 @@ function map(v, i1, i2, o1, o2) {
   return o1 + (o2 - o1) * ((v - i1) / (i2 - i1));
 }
 
-},{"../dom/dom.js":59,"../utils/common.js":61,"../utils/css.js":62,"./NumberController.js":52}],55:[function(require,module,exports){
+},{"../dom/dom.js":60,"../utils/common.js":62,"../utils/css.js":63,"./NumberController.js":53}],56:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -29582,7 +29659,7 @@ common.extend(
 
 );
 
-},{"../dom/dom.js":59,"../utils/common.js":61,"./Controller.js":50}],56:[function(require,module,exports){
+},{"../dom/dom.js":60,"../utils/common.js":62,"./Controller.js":51}],57:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -29669,7 +29746,7 @@ common.extend(
 
 );
 
-},{"../dom/dom.js":59,"../utils/common.js":61,"./Controller.js":50}],57:[function(require,module,exports){
+},{"../dom/dom.js":60,"../utils/common.js":62,"./Controller.js":51}],58:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -29735,7 +29812,7 @@ function factory(object, property) {
 
 }
 
-},{"../utils/common.js":61,"./BooleanController.js":48,"./FunctionController.js":51,"./NumberControllerBox.js":53,"./NumberControllerSlider.js":54,"./OptionController.js":55,"./StringController.js":56}],58:[function(require,module,exports){
+},{"../utils/common.js":62,"./BooleanController.js":49,"./FunctionController.js":52,"./NumberControllerBox.js":54,"./NumberControllerSlider.js":55,"./OptionController.js":56,"./StringController.js":57}],59:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -29849,7 +29926,7 @@ function lockScroll(e) {
   console.log(e);
 }
 
-},{"../utils/common.js":61,"./dom.js":59}],59:[function(require,module,exports){
+},{"../utils/common.js":62,"./dom.js":60}],60:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -30136,7 +30213,7 @@ var dom = {
 
 module.exports = dom;
 
-},{"../utils/common.js":61}],60:[function(require,module,exports){
+},{"../utils/common.js":62}],61:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -31538,7 +31615,7 @@ function createGUI() {
   return GUI;
 }
 
-},{"../controllers/BooleanController.js":48,"../controllers/ColorController.js":49,"../controllers/Controller.js":50,"../controllers/FunctionController.js":51,"../controllers/NumberControllerBox.js":53,"../controllers/NumberControllerSlider.js":54,"../controllers/factory.js":57,"../dom/CenteredDiv.js":58,"../dom/dom.js":59,"../utils/common.js":61,"../utils/css.js":62,"../utils/requestAnimationFrame.js":64}],61:[function(require,module,exports){
+},{"../controllers/BooleanController.js":49,"../controllers/ColorController.js":50,"../controllers/Controller.js":51,"../controllers/FunctionController.js":52,"../controllers/NumberControllerBox.js":54,"../controllers/NumberControllerSlider.js":55,"../controllers/factory.js":58,"../dom/CenteredDiv.js":59,"../dom/dom.js":60,"../utils/common.js":62,"../utils/css.js":63,"../utils/requestAnimationFrame.js":65}],62:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -31680,7 +31757,7 @@ function common() {
   };
 }
 
-},{}],62:[function(require,module,exports){
+},{}],63:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -31715,7 +31792,7 @@ function css() {
   };
 }
 
-},{}],63:[function(require,module,exports){
+},{}],64:[function(require,module,exports){
 module.exports = escape;
 
 var entityMap = {
@@ -31733,7 +31810,7 @@ function escape(string) {
   });
 }
 
-},{}],64:[function(require,module,exports){
+},{}],65:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -31766,7 +31843,7 @@ function raf() {
       };
 }
 
-},{}],65:[function(require,module,exports){
+},{}],66:[function(require,module,exports){
 /** @license
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -31806,7 +31883,7 @@ module.exports = {
   GUI: require('./dat/gui/GUI.js')
 };
 
-},{"./dat/color/Color.js":44,"./dat/color/interpret.js":45,"./dat/color/math.js":46,"./dat/controllers/BooleanController.js":48,"./dat/controllers/ColorController.js":49,"./dat/controllers/Controller.js":50,"./dat/controllers/FunctionController.js":51,"./dat/controllers/NumberController.js":52,"./dat/controllers/NumberControllerBox.js":53,"./dat/controllers/NumberControllerSlider.js":54,"./dat/controllers/OptionController.js":55,"./dat/controllers/StringController.js":56,"./dat/dom/dom.js":59,"./dat/gui/GUI.js":60}],66:[function(require,module,exports){
+},{"./dat/color/Color.js":45,"./dat/color/interpret.js":46,"./dat/color/math.js":47,"./dat/controllers/BooleanController.js":49,"./dat/controllers/ColorController.js":50,"./dat/controllers/Controller.js":51,"./dat/controllers/FunctionController.js":52,"./dat/controllers/NumberController.js":53,"./dat/controllers/NumberControllerBox.js":54,"./dat/controllers/NumberControllerSlider.js":55,"./dat/controllers/OptionController.js":56,"./dat/controllers/StringController.js":57,"./dat/dom/dom.js":60,"./dat/gui/GUI.js":61}],67:[function(require,module,exports){
 module.exports = add
 
 /**
@@ -31822,7 +31899,7 @@ function add(out, a, b) {
     out[1] = a[1] + b[1]
     return out
 }
-},{}],67:[function(require,module,exports){
+},{}],68:[function(require,module,exports){
 module.exports = dot
 
 /**
@@ -31835,7 +31912,7 @@ module.exports = dot
 function dot(a, b) {
     return a[0] * b[0] + a[1] * b[1]
 }
-},{}],68:[function(require,module,exports){
+},{}],69:[function(require,module,exports){
 module.exports = normalize
 
 /**
@@ -31857,7 +31934,7 @@ function normalize(out, a) {
     }
     return out
 }
-},{}],69:[function(require,module,exports){
+},{}],70:[function(require,module,exports){
 module.exports = set
 
 /**
@@ -31873,7 +31950,7 @@ function set(out, x, y) {
     out[1] = y
     return out
 }
-},{}],70:[function(require,module,exports){
+},{}],71:[function(require,module,exports){
 module.exports = subtract
 
 /**
@@ -31889,7 +31966,7 @@ function subtract(out, a, b) {
     out[1] = a[1] - b[1]
     return out
 }
-},{}],71:[function(require,module,exports){
+},{}],72:[function(require,module,exports){
 (function (global){
 
 /*
@@ -31952,9 +32029,9 @@ function hasBinary(data) {
 }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"isarray":72}],72:[function(require,module,exports){
-arguments[4][43][0].apply(exports,arguments)
-},{"dup":43}],73:[function(require,module,exports){
+},{"isarray":73}],73:[function(require,module,exports){
+arguments[4][44][0].apply(exports,arguments)
+},{"dup":44}],74:[function(require,module,exports){
 
 /**
  * Module exports.
@@ -31973,7 +32050,7 @@ try {
   module.exports = false;
 }
 
-},{}],74:[function(require,module,exports){
+},{}],75:[function(require,module,exports){
 
 var indexOf = [].indexOf;
 
@@ -31984,7 +32061,7 @@ module.exports = function(arr, obj){
   }
   return -1;
 };
-},{}],75:[function(require,module,exports){
+},{}],76:[function(require,module,exports){
 if (typeof Object.create === 'function') {
   // implementation from standard node.js 'util' module
   module.exports = function inherits(ctor, superCtor) {
@@ -32009,7 +32086,7 @@ if (typeof Object.create === 'function') {
   }
 }
 
-},{}],76:[function(require,module,exports){
+},{}],77:[function(require,module,exports){
 /*!
  * jQuery JavaScript Library v3.0.0 -ajax,-ajax/jsonp,-ajax/load,-ajax/parseXML,-ajax/script,-ajax/var/location,-ajax/var/nonce,-ajax/var/rquery,-ajax/xhr,-manipulation/_evalUrl,-event/ajax,-effects,-effects/Tween,-effects/animatedSelector,-deprecated
  * https://jquery.com/
@@ -39943,7 +40020,7 @@ if ( !noGlobal ) {
 return jQuery;
 } ) );
 
-},{}],77:[function(require,module,exports){
+},{}],78:[function(require,module,exports){
 /*!
  * jQuery JavaScript Library v3.1.1
  * https://jquery.com/
@@ -50165,7 +50242,7 @@ if ( !noGlobal ) {
 return jQuery;
 } );
 
-},{}],78:[function(require,module,exports){
+},{}],79:[function(require,module,exports){
 (function (global){
 /*! JSON v3.3.2 | http://bestiejs.github.io/json3 | Copyright 2012-2014, Kit Cambridge | http://kit.mit-license.org */
 ;(function () {
@@ -51071,11 +51148,11 @@ return jQuery;
 }).call(this);
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],79:[function(require,module,exports){
+},{}],80:[function(require,module,exports){
 var _ = require('./lodash.min').runInContext();
 module.exports = require('./fp/_baseConvert')(_, _);
 
-},{"./fp/_baseConvert":80,"./lodash.min":84}],80:[function(require,module,exports){
+},{"./fp/_baseConvert":81,"./lodash.min":85}],81:[function(require,module,exports){
 var mapping = require('./_mapping'),
     fallbackHolder = require('./placeholder');
 
@@ -51613,7 +51690,7 @@ function baseConvert(util, name, func, options) {
 
 module.exports = baseConvert;
 
-},{"./_mapping":81,"./placeholder":82}],81:[function(require,module,exports){
+},{"./_mapping":82,"./placeholder":83}],82:[function(require,module,exports){
 /** Used to map aliases to their real names. */
 exports.aliasToReal = {
 
@@ -51982,7 +52059,7 @@ exports.skipRearg = {
   'zipObjectDeep': true
 };
 
-},{}],82:[function(require,module,exports){
+},{}],83:[function(require,module,exports){
 /**
  * The default argument placeholder value for methods.
  *
@@ -51990,7 +52067,7 @@ exports.skipRearg = {
  */
 module.exports = {};
 
-},{}],83:[function(require,module,exports){
+},{}],84:[function(require,module,exports){
 (function (global){
 /**
  * @license
@@ -69012,7 +69089,7 @@ module.exports = {};
 }.call(this));
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],84:[function(require,module,exports){
+},{}],85:[function(require,module,exports){
 (function (global){
 /**
  * @license
@@ -69150,7 +69227,7 @@ c=0,a=Li(n,this.__takeCount__),!e||200>i||i==n&&a==n)return Ar(t,this.__actions_
 return{done:n,value:n?F:this.__values__[this.__index__++]}},On.prototype.plant=function(n){for(var t,r=this;r instanceof Sn;){var e=Te(r);e.__index__=0,e.__values__=F,t?u.__wrapped__=e:t=e;var u=e,r=r.__wrapped__}return u.__wrapped__=n,t},On.prototype.reverse=function(){var n=this.__wrapped__;return n instanceof Mn?(this.__actions__.length&&(n=new Mn(this)),n=n.reverse(),n.__actions__.push({func:Je,args:[Ve],thisArg:F}),new zn(n,this.__chain__)):this.thru(Ve)},On.prototype.toJSON=On.prototype.valueOf=On.prototype.value=function(){
 return Ar(this.__wrapped__,this.__actions__)},On.prototype.first=On.prototype.head,xi&&(On.prototype[xi]=Ye),On}();typeof define=="function"&&typeof define.amd=="object"&&define.amd?(Zn._=it, define(function(){return it})):Vn?((Vn.exports=it)._=it,qn._=it):Zn._=it}).call(this);
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],85:[function(require,module,exports){
+},{}],86:[function(require,module,exports){
 /**
  * Helpers.
  */
@@ -69277,7 +69354,7 @@ function plural(ms, n, name) {
   return Math.ceil(ms / n) + ' ' + name + 's';
 }
 
-},{}],86:[function(require,module,exports){
+},{}],87:[function(require,module,exports){
 var getBounds = require('bound-points')
 var unlerp = require('unlerp')
 
@@ -69310,7 +69387,7 @@ function normalizePathScale (positions, bounds) {
   }
   return positions
 }
-},{"bound-points":16,"unlerp":109}],87:[function(require,module,exports){
+},{"bound-points":17,"unlerp":110}],88:[function(require,module,exports){
 (function (global){
 "use strict";
 
@@ -73738,7 +73815,7 @@ numeric.svd= function svd(A) {
 
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],88:[function(require,module,exports){
+},{}],89:[function(require,module,exports){
 'use strict';
 /* eslint-disable no-unused-vars */
 var hasOwnProperty = Object.prototype.hasOwnProperty;
@@ -73823,7 +73900,7 @@ module.exports = shouldUseNative() ? Object.assign : function (target, source) {
 	return to;
 };
 
-},{}],89:[function(require,module,exports){
+},{}],90:[function(require,module,exports){
 (function (global){
 /**
  * JSON parse.
@@ -73858,7 +73935,7 @@ module.exports = function parsejson(data) {
   }
 };
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],90:[function(require,module,exports){
+},{}],91:[function(require,module,exports){
 /**
  * Compiles a querystring
  * Returns string representation of the object
@@ -73897,7 +73974,7 @@ exports.decode = function(qs){
   return qry;
 };
 
-},{}],91:[function(require,module,exports){
+},{}],92:[function(require,module,exports){
 /**
  * Parses an URI
  *
@@ -73938,7 +74015,7 @@ module.exports = function parseuri(str) {
     return uri;
 };
 
-},{}],92:[function(require,module,exports){
+},{}],93:[function(require,module,exports){
 var add = require('gl-vec2/add')
 var set = require('gl-vec2/set')
 var normalize = require('gl-vec2/normalize')
@@ -73972,7 +74049,7 @@ module.exports.direction = function direction(out, a, b) {
     normalize(out, out)
     return out
 }
-},{"gl-vec2/add":66,"gl-vec2/dot":67,"gl-vec2/normalize":68,"gl-vec2/set":69,"gl-vec2/subtract":70}],93:[function(require,module,exports){
+},{"gl-vec2/add":67,"gl-vec2/dot":68,"gl-vec2/normalize":69,"gl-vec2/set":70,"gl-vec2/subtract":71}],94:[function(require,module,exports){
 var util = require('polyline-miter-util')
 
 var lineA = [0, 0]
@@ -74040,7 +74117,7 @@ module.exports = function(points, closed) {
 function addNext(out, normal, length) {
     out.push([[normal[0], normal[1]], length])
 }
-},{"polyline-miter-util":92}],94:[function(require,module,exports){
+},{"polyline-miter-util":93}],95:[function(require,module,exports){
 
 /**
  * Module dependencies.
@@ -74151,7 +74228,7 @@ exports.connect = lookup;
 exports.Manager = require('./manager');
 exports.Socket = require('./socket');
 
-},{"./manager":95,"./socket":97,"./url":98,"debug":27,"socket.io-parser":100}],95:[function(require,module,exports){
+},{"./manager":96,"./socket":98,"./url":99,"debug":28,"socket.io-parser":101}],96:[function(require,module,exports){
 
 /**
  * Module dependencies.
@@ -74713,7 +74790,7 @@ Manager.prototype.onreconnect = function () {
   this.emitAll('reconnect', attempt);
 };
 
-},{"./on":96,"./socket":97,"backo2":13,"component-bind":23,"component-emitter":24,"debug":27,"engine.io-client":29,"indexof":74,"socket.io-parser":100}],96:[function(require,module,exports){
+},{"./on":97,"./socket":98,"backo2":14,"component-bind":24,"component-emitter":25,"debug":28,"engine.io-client":30,"indexof":75,"socket.io-parser":101}],97:[function(require,module,exports){
 
 /**
  * Module exports.
@@ -74739,7 +74816,7 @@ function on (obj, ev, fn) {
   };
 }
 
-},{}],97:[function(require,module,exports){
+},{}],98:[function(require,module,exports){
 
 /**
  * Module dependencies.
@@ -75160,7 +75237,7 @@ Socket.prototype.compress = function (compress) {
   return this;
 };
 
-},{"./on":96,"component-bind":23,"component-emitter":24,"debug":27,"has-binary":71,"socket.io-parser":100,"to-array":107}],98:[function(require,module,exports){
+},{"./on":97,"component-bind":24,"component-emitter":25,"debug":28,"has-binary":72,"socket.io-parser":101,"to-array":108}],99:[function(require,module,exports){
 (function (global){
 
 /**
@@ -75239,7 +75316,7 @@ function url (uri, loc) {
 }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"debug":27,"parseuri":91}],99:[function(require,module,exports){
+},{"debug":28,"parseuri":92}],100:[function(require,module,exports){
 (function (global){
 /*global Blob,File*/
 
@@ -75384,7 +75461,7 @@ exports.removeBlobs = function(data, callback) {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./is-buffer":101,"isarray":103}],100:[function(require,module,exports){
+},{"./is-buffer":102,"isarray":104}],101:[function(require,module,exports){
 
 /**
  * Module dependencies.
@@ -75790,7 +75867,7 @@ function error(data){
   };
 }
 
-},{"./binary":99,"./is-buffer":101,"component-emitter":102,"debug":27,"json3":78}],101:[function(require,module,exports){
+},{"./binary":100,"./is-buffer":102,"component-emitter":103,"debug":28,"json3":79}],102:[function(require,module,exports){
 (function (global){
 
 module.exports = isBuf;
@@ -75807,11 +75884,11 @@ function isBuf(obj) {
 }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],102:[function(require,module,exports){
-arguments[4][39][0].apply(exports,arguments)
-},{"dup":39}],103:[function(require,module,exports){
-arguments[4][43][0].apply(exports,arguments)
-},{"dup":43}],104:[function(require,module,exports){
+},{}],103:[function(require,module,exports){
+arguments[4][40][0].apply(exports,arguments)
+},{"dup":40}],104:[function(require,module,exports){
+arguments[4][44][0].apply(exports,arguments)
+},{"dup":44}],105:[function(require,module,exports){
 // stats.js - http://github.com/mrdoob/stats.js
 var Stats=function(){var l=Date.now(),m=l,g=0,n=Infinity,o=0,h=0,p=Infinity,q=0,r=0,s=0,f=document.createElement("div");f.id="stats";f.addEventListener("mousedown",function(b){b.preventDefault();t(++s%2)},!1);f.style.cssText="width:80px;opacity:0.9;cursor:pointer";var a=document.createElement("div");a.id="fps";a.style.cssText="padding:0 0 3px 3px;text-align:left;background-color:#002";f.appendChild(a);var i=document.createElement("div");i.id="fpsText";i.style.cssText="color:#0ff;font-family:Helvetica,Arial,sans-serif;font-size:9px;font-weight:bold;line-height:15px";
 i.innerHTML="FPS";a.appendChild(i);var c=document.createElement("div");c.id="fpsGraph";c.style.cssText="position:relative;width:74px;height:30px;background-color:#0ff";for(a.appendChild(c);74>c.children.length;){var j=document.createElement("span");j.style.cssText="width:1px;height:30px;float:left;background-color:#113";c.appendChild(j)}var d=document.createElement("div");d.id="ms";d.style.cssText="padding:0 0 3px 3px;text-align:left;background-color:#020;display:none";f.appendChild(d);var k=document.createElement("div");
@@ -75819,7 +75896,7 @@ k.id="msText";k.style.cssText="color:#0f0;font-family:Helvetica,Arial,sans-serif
 "block";d.style.display="none";break;case 1:a.style.display="none",d.style.display="block"}};return{REVISION:12,domElement:f,setMode:t,begin:function(){l=Date.now()},end:function(){var b=Date.now();g=b-l;n=Math.min(n,g);o=Math.max(o,g);k.textContent=g+" MS ("+n+"-"+o+")";var a=Math.min(30,30-30*(g/200));e.appendChild(e.firstChild).style.height=a+"px";r++;b>m+1E3&&(h=Math.round(1E3*r/(b-m)),p=Math.min(p,h),q=Math.max(q,h),i.textContent=h+" FPS ("+p+"-"+q+")",a=Math.min(30,30-30*(h/100)),c.appendChild(c.firstChild).style.height=
 a+"px",m=b,r=0);return b},update:function(){l=this.end()}}};"object"===typeof module&&(module.exports=Stats);
 
-},{}],105:[function(require,module,exports){
+},{}],106:[function(require,module,exports){
 module.exports = function(THREE) {
 	var MOUSE = THREE.MOUSE
 	if (!MOUSE)
@@ -76940,7 +77017,7 @@ module.exports = function(THREE) {
 	return OrbitControls;
 }
 
-},{}],106:[function(require,module,exports){
+},{}],107:[function(require,module,exports){
 (function (global, factory) {
     typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports) :
     typeof define === 'function' && define.amd ? define(['exports'], factory) :
@@ -118733,7 +118810,7 @@ module.exports = function(THREE) {
     Object.defineProperty(exports, '__esModule', { value: true });
 
 })));
-},{}],107:[function(require,module,exports){
+},{}],108:[function(require,module,exports){
 module.exports = toArray
 
 function toArray(list, index) {
@@ -118748,7 +118825,7 @@ function toArray(list, index) {
     return array
 }
 
-},{}],108:[function(require,module,exports){
+},{}],109:[function(require,module,exports){
 //     Underscore.js 1.8.3
 //     http://underscorejs.org
 //     (c) 2009-2015 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
@@ -120298,11 +120375,11 @@ function toArray(list, index) {
   }
 }.call(this));
 
-},{}],109:[function(require,module,exports){
+},{}],110:[function(require,module,exports){
 module.exports = function range(min, max, value) {
   return (value - min) / (max - min)
 }
-},{}],110:[function(require,module,exports){
+},{}],111:[function(require,module,exports){
 (function (global){
 /*! https://mths.be/wtf8 v1.0.0 by @mathias */
 ;(function(root) {
@@ -120540,7 +120617,7 @@ module.exports = function range(min, max, value) {
 }(this));
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],111:[function(require,module,exports){
+},{}],112:[function(require,module,exports){
 'use strict';
 
 var alphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_'.split('')
@@ -120610,7 +120687,7 @@ yeast.encode = encode;
 yeast.decode = decode;
 module.exports = yeast;
 
-},{}],112:[function(require,module,exports){
+},{}],113:[function(require,module,exports){
 const d3 = require("d3");
 
 
@@ -120778,7 +120855,8 @@ module.exports = (THREE) => {
             if(this.updatePos){
                 if(!this.prevPos)
                     this.prevPos = $.extend(true, [], posArray);
-                var transform = PerspT(posArray, this.prevPos).coeffsInv;
+                var transform = PerspectiveTransform(posArray,
+                                                     this.prevPos).coeffsInv;
 
                 var geoPos = this.getUpdatedPosArray(this.geometry.attributes.position.array, transform, 3);
                 for (var i = 0; i < geoPos.length; i++){
@@ -120800,7 +120878,9 @@ module.exports = (THREE) => {
         remapControlHandles(){
             if(this.savedGeometryPosition){
                 var newControlPos = this.cameraToScreen(this.geometry.attributes.position.array);
-                var transform = PerspT(this.savedGeometryPosition, newControlPos).coeffs;
+                var transform =
+                    PerspectiveTransform(this.savedGeometryPosition,
+                                         newControlPos).coeffs;
 
                 var controlPointsArray = [];
                 for(var i = 0; i < this.controlPoints.length; i++){
@@ -120957,7 +121037,7 @@ module.exports = (THREE) => {
     return PlaneTransform;
 }
 
-},{"d3":26}],113:[function(require,module,exports){
+},{"d3":27}],114:[function(require,module,exports){
 var assign = require('object-assign');
 
 module.exports = function (THREE) {
@@ -121009,7 +121089,7 @@ module.exports = function (THREE) {
   };
 };
 
-},{"object-assign":88}],114:[function(require,module,exports){
+},{"object-assign":89}],115:[function(require,module,exports){
 (function (global){
 /*
  * Currently, ``browserify-shim`` is used for ``two.js``, as described [here][1].
@@ -121050,7 +121130,6 @@ global.$ = require("jquery-slim");
 global.d3 = require("d3");
 global.THREE.OrbitControls = require('three-orbit-controls')(THREE);
 global.Stats = require("stats-js");
-global.numeric = require("numeric");
 
 global.MouseEventHandler =
     require("../ThreeHelpers.MouseEventHandler.js")(THREE);
@@ -121058,10 +121137,11 @@ global.ThreeHelpers =
     require("../ThreeHelpers.SvgPathsGroup.js")(THREE);
 global.ZmqPlugin = require("../zmq-plugin.js");
 global.ControlPointsUI = require("../d3.controlPoints.js");
+global.PerspectiveTransform = require("../PerspectiveTransform.js");
 global.PlaneTransform = require("../planeTransform.js")(THREE);
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../":5,"../ThreeHelpers.MouseEventHandler.js":1,"../ThreeHelpers.SvgPathsGroup.js":2,"../d3.controlPoints.js":4,"../planeTransform.js":112,"../shaders/basic":113,"../zmq-plugin.js":117,"./shader-dash":115,"./shader-gradient":116,"adaptive-bezier-curve":7,"arc-to":9,"codemirror/lib/codemirror":18,"codemirror/mode/css/css":19,"codemirror/mode/htmlmixed/htmlmixed":20,"codemirror/mode/javascript/javascript":21,"codemirror/mode/xml/xml":22,"d3":26,"exdat":65,"jquery-slim":76,"lodash":83,"lodash/fp":79,"normalize-path-scale":86,"numeric":87,"socket.io-client":94,"stats-js":104,"three":106,"three-orbit-controls":105,"two":3}],115:[function(require,module,exports){
+},{"../":6,"../PerspectiveTransform.js":1,"../ThreeHelpers.MouseEventHandler.js":2,"../ThreeHelpers.SvgPathsGroup.js":3,"../d3.controlPoints.js":5,"../planeTransform.js":113,"../shaders/basic":114,"../zmq-plugin.js":118,"./shader-dash":116,"./shader-gradient":117,"adaptive-bezier-curve":8,"arc-to":10,"codemirror/lib/codemirror":19,"codemirror/mode/css/css":20,"codemirror/mode/htmlmixed/htmlmixed":21,"codemirror/mode/javascript/javascript":22,"codemirror/mode/xml/xml":23,"d3":27,"exdat":66,"jquery-slim":77,"lodash":84,"lodash/fp":80,"normalize-path-scale":87,"socket.io-client":95,"stats-js":105,"three":107,"three-orbit-controls":106,"two":4}],116:[function(require,module,exports){
 var number = require('as-number');
 var assign = require('object-assign');
 
@@ -121128,7 +121208,7 @@ module.exports = function (THREE) {
   };
 };
 
-},{"as-number":11,"object-assign":88}],116:[function(require,module,exports){
+},{"as-number":12,"object-assign":89}],117:[function(require,module,exports){
 var assign = require('object-assign');
 var number = require('as-number');
 
@@ -121195,7 +121275,7 @@ module.exports = function (THREE) {
   };
 };
 
-},{"as-number":11,"object-assign":88}],117:[function(require,module,exports){
+},{"as-number":12,"object-assign":89}],118:[function(require,module,exports){
 module.exports = {
     decode_content_data: (msg) => {
         var mime_type = msg.content.metadata.mime_type;
@@ -121213,4 +121293,4 @@ module.exports = {
     }
 }
 
-},{}]},{},[114]);
+},{}]},{},[115]);
