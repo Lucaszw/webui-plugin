@@ -355,7 +355,7 @@ class DeviceView {
         // Create and display stats widget (displays frames per second).
         this.stats = initStats();
         // Create `three.js` scene and plane with video from webcam.
-        this.threePlane = new planeTransform(canvasElement,
+        this.threePlane = new PlaneTransform(canvasElement,
                                              controlHandlesElement);
 
         // Create orbit controls to zoom, pan, etc.  Start at center of SVG

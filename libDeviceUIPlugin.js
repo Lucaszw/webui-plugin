@@ -105,7 +105,7 @@ module.exports = (THREE) => function MouseEventHandler(options) {
     _.extend(self, Backbone.Events);
 };
 
-},{"backbone":11,"lodash":82}],2:[function(require,module,exports){
+},{"backbone":12,"lodash":83}],2:[function(require,module,exports){
 const Two = require('two');
 const _ = require('lodash');
 
@@ -407,7 +407,7 @@ module.exports = (THREE) => {
     return ThreeHelpers;
 }
 
-},{"lodash":82,"two":3}],3:[function(require,module,exports){
+},{"lodash":83,"two":3}],3:[function(require,module,exports){
 (function (global){
 ; var __browserify_shim_require__=require;(function browserifyShim(module, exports, require, define, browserify_shim__define__module__export__) {
 (function(){function e(a){return function(d,c,f,q){c=j(c,q,4);var e=!C(d)&&g.keys(d),h=(e||d).length,l=0<a?0:h-1;3>arguments.length&&(f=d[e?e[l]:l],l+=a);for(var s=c,t=f;0<=l&&l<h;l+=a)var B=e?e[l]:l,t=s(t,d[B],B,d);return t}}function h(a){return function(d,g,c){g=x(g,c);c=A(d);for(var f=0<a?0:c-1;0<=f&&f<c;f+=a)if(g(d[f],f,d))return f;return-1}}function p(a,d,c){return function(q,e,j){var h=0,l=A(q);if("number"==typeof j)0<a?h=0<=j?j:Math.max(j+l,h):l=0<=j?Math.min(j+1,l):j+l+1;else if(c&&j&&l)return j=
@@ -624,6 +624,96 @@ this.Backbone,"function"===typeof require&&!("function"===typeof define&&define.
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 },{}],4:[function(require,module,exports){
+const Backbone = require("backbone");
+const _ = require("lodash");
+const d3 = require("d3");
+
+
+module.exports = function ControlPointsUI() {
+    var radius = 30;
+
+    function my(selection) {
+        my.selection = selection;
+        my.events = {};
+        my.reset_drag_direction = function () { my.drag_direction = {x: true, y: true}; }
+        my.reset_drag_direction();
+
+        // Use d3.js to provide user-draggable control points
+        var rectDragBehav = d3.behavior.drag()
+            .on('dragstart', function(d,i) {
+              my.reset_drag_direction();
+              my.events = {dragstart: _.clone(d3.event)};
+            })
+            .on('dragend', function(d,i) {
+              my.reset_drag_direction();
+              my.events = {dragend: _.clone(d3.event)};
+            })
+            .on('drag', function(d,i) {
+                    if (d3.event.sourceEvent.ctrlKey) {
+                      if (my.drag_direction.x && my.drag_direction.y &&
+                          ((d3.event.dx > 0) || (d3.event.dy > 0))) {
+                        my.drag_direction.x = Math.abs(d3.event.dx) >= Math.abs(d3.event.dy);
+                        my.drag_direction.y = Math.abs(d3.event.dx) < Math.abs(d3.event.dy);
+                        console.log(my.drag_direction, d3.event.dx, d3.event.dy);
+                      }
+                    } else {
+                      my.reset_drag_direction();
+                    }
+                    for (key in my.drag_direction) {
+                      if (my.drag_direction[key]) {
+                        // d[key] += d3.event['d' + key];
+                        d[key] = d3.event.sourceEvent['offset' + key.toUpperCase()];
+                      }
+                    }
+
+                    d3.select(this)
+                      .attr('cx',d.x).attr('cy',d.y);
+                    my.trigger("changed", [{"d": d, "i": i}]);
+                    my.events.drag = _.clone(d3.event);
+                });
+
+        var dragT = selection.enter()
+          .append('circle')
+            .attr('r', radius)
+            .attr('class', 'control-point')
+            .on('mousedown', function (d, i) {
+              my.events = {mousedown: _.clone(d3.event)};
+            })
+            .on('mouseup', function (d, i) {
+              my.events.mouseup = _.clone(d3.event);
+            })
+            .call(rectDragBehav);
+        my.update_positions();
+      return my;
+    }
+
+    my.radius = function (radius) {
+      my.selection.attr('r', radius);
+      return my;
+    }
+
+    my.rotate = function (n) {
+      var data = _.clone(my.selection.data());
+      data.unshift.apply(data, data.splice(n, data.length ))
+      my.selection.data(data);
+      my.trigger("changed", data.map(function (d, i) { return {"d": d, "i": i}; }));
+      my.update_positions();
+      return my;
+    }
+
+    my.update_positions = function () {
+      my.selection
+        .attr('cx', function(d) { return d.x; })
+        .attr('cy', function(d) { return d.y; })
+      return my;
+    }
+
+    _.extend(my, Backbone.Events);
+
+    return my;
+};
+
+},{"backbone":12,"d3":26,"lodash":83}],5:[function(require,module,exports){
 var inherits = require('inherits');
 var getNormals = require('polyline-normals');
 var VERTS_PER_POINT = 2;
@@ -757,7 +847,7 @@ module.exports = function createLineMesh (THREE) {
   return LineMesh;
 };
 
-},{"inherits":74,"polyline-normals":92}],5:[function(require,module,exports){
+},{"inherits":75,"polyline-normals":93}],6:[function(require,module,exports){
 function clone(point) { //TODO: use gl-vec2 for this
     return [point[0], point[1]]
 }
@@ -956,9 +1046,9 @@ module.exports = function createBezierBuilder(opt) {
     }
 }
 
-},{}],6:[function(require,module,exports){
+},{}],7:[function(require,module,exports){
 module.exports = require('./function')()
-},{"./function":5}],7:[function(require,module,exports){
+},{"./function":6}],8:[function(require,module,exports){
 module.exports = after
 
 function after(count, callback, err_cb) {
@@ -988,7 +1078,7 @@ function after(count, callback, err_cb) {
 
 function noop() {}
 
-},{}],8:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 //if 'steps' is not specified, we'll just approximate it
 module.exports = function arc(x, y, radius, start, end, clockwise, steps, path) {
     if (!path)
@@ -1034,7 +1124,7 @@ module.exports = function arc(x, y, radius, start, end, clockwise, steps, path) 
     }
     return path
 }
-},{}],9:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 /**
  * An abstraction for slicing an arraybuffer even when
  * ArrayBuffer.prototype.slice is not supported
@@ -1065,13 +1155,13 @@ module.exports = function(arraybuffer, start, end) {
   return result.buffer;
 };
 
-},{}],10:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 module.exports = function numtype(num, def) {
 	return typeof num === 'number'
 		? num 
 		: (typeof def === 'number' ? def : 0)
 }
-},{}],11:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 (function (global){
 //     Backbone.js 1.3.3
 
@@ -2995,7 +3085,7 @@ module.exports = function numtype(num, def) {
 });
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"jquery":76,"underscore":107}],12:[function(require,module,exports){
+},{"jquery":77,"underscore":108}],13:[function(require,module,exports){
 
 /**
  * Expose `Backoff`.
@@ -3082,7 +3172,7 @@ Backoff.prototype.setJitter = function(jitter){
 };
 
 
-},{}],13:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
 /*
  * base64-arraybuffer
  * https://github.com/niklasvh/base64-arraybuffer
@@ -3151,7 +3241,7 @@ Backoff.prototype.setJitter = function(jitter){
   };
 })();
 
-},{}],14:[function(require,module,exports){
+},{}],15:[function(require,module,exports){
 (function (global){
 /**
  * Create a blob builder even when vendor prefixes exist
@@ -3251,7 +3341,7 @@ module.exports = (function() {
 })();
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],15:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
 'use strict'
 
 module.exports = findBounds
@@ -3274,9 +3364,9 @@ function findBounds(points) {
   }
   return [lo, hi]
 }
-},{}],16:[function(require,module,exports){
-
 },{}],17:[function(require,module,exports){
+
+},{}],18:[function(require,module,exports){
 // CodeMirror, copyright (c) by Marijn Haverbeke and others
 // Distributed under an MIT license: http://codemirror.net/LICENSE
 
@@ -12372,7 +12462,7 @@ CodeMirror.version = "5.20.2"
 return CodeMirror;
 
 })));
-},{}],18:[function(require,module,exports){
+},{}],19:[function(require,module,exports){
 // CodeMirror, copyright (c) by Marijn Haverbeke and others
 // Distributed under an MIT license: http://codemirror.net/LICENSE
 
@@ -13199,7 +13289,7 @@ CodeMirror.defineMode("css", function(config, parserConfig) {
 
 });
 
-},{"../../lib/codemirror":17}],19:[function(require,module,exports){
+},{"../../lib/codemirror":18}],20:[function(require,module,exports){
 // CodeMirror, copyright (c) by Marijn Haverbeke and others
 // Distributed under an MIT license: http://codemirror.net/LICENSE
 
@@ -13353,7 +13443,7 @@ CodeMirror.defineMode("css", function(config, parserConfig) {
   CodeMirror.defineMIME("text/html", "htmlmixed");
 });
 
-},{"../../lib/codemirror":17,"../css/css":18,"../javascript/javascript":20,"../xml/xml":21}],20:[function(require,module,exports){
+},{"../../lib/codemirror":18,"../css/css":19,"../javascript/javascript":21,"../xml/xml":22}],21:[function(require,module,exports){
 // CodeMirror, copyright (c) by Marijn Haverbeke and others
 // Distributed under an MIT license: http://codemirror.net/LICENSE
 
@@ -14139,7 +14229,7 @@ CodeMirror.defineMIME("application/typescript", { name: "javascript", typescript
 
 });
 
-},{"../../lib/codemirror":17}],21:[function(require,module,exports){
+},{"../../lib/codemirror":18}],22:[function(require,module,exports){
 // CodeMirror, copyright (c) by Marijn Haverbeke and others
 // Distributed under an MIT license: http://codemirror.net/LICENSE
 
@@ -14535,7 +14625,7 @@ if (!CodeMirror.mimeModes.hasOwnProperty("text/html"))
 
 });
 
-},{"../../lib/codemirror":17}],22:[function(require,module,exports){
+},{"../../lib/codemirror":18}],23:[function(require,module,exports){
 /**
  * Slice reference.
  */
@@ -14560,7 +14650,7 @@ module.exports = function(obj, fn){
   }
 };
 
-},{}],23:[function(require,module,exports){
+},{}],24:[function(require,module,exports){
 
 /**
  * Expose `Emitter`.
@@ -14723,7 +14813,7 @@ Emitter.prototype.hasListeners = function(event){
   return !! this.listeners(event).length;
 };
 
-},{}],24:[function(require,module,exports){
+},{}],25:[function(require,module,exports){
 
 module.exports = function(a, b){
   var fn = function(){};
@@ -14731,7 +14821,7 @@ module.exports = function(a, b){
   a.prototype = new fn;
   a.prototype.constructor = a;
 };
-},{}],25:[function(require,module,exports){
+},{}],26:[function(require,module,exports){
 !function() {
   var d3 = {
     version: "3.5.17"
@@ -24286,7 +24376,7 @@ module.exports = function(a, b){
   });
   if (typeof define === "function" && define.amd) this.d3 = d3, define(d3); else if (typeof module === "object" && module.exports) module.exports = d3; else this.d3 = d3;
 }();
-},{}],26:[function(require,module,exports){
+},{}],27:[function(require,module,exports){
 
 /**
  * This is the web browser implementation of `debug()`.
@@ -24456,7 +24546,7 @@ function localstorage(){
   } catch (e) {}
 }
 
-},{"./debug":27}],27:[function(require,module,exports){
+},{"./debug":28}],28:[function(require,module,exports){
 
 /**
  * This is the common logic for both the Node.js and web browser
@@ -24655,11 +24745,11 @@ function coerce(val) {
   return val;
 }
 
-},{"ms":84}],28:[function(require,module,exports){
+},{"ms":85}],29:[function(require,module,exports){
 
 module.exports = require('./lib/index');
 
-},{"./lib/index":29}],29:[function(require,module,exports){
+},{"./lib/index":30}],30:[function(require,module,exports){
 
 module.exports = require('./socket');
 
@@ -24671,7 +24761,7 @@ module.exports = require('./socket');
  */
 module.exports.parser = require('engine.io-parser');
 
-},{"./socket":30,"engine.io-parser":39}],30:[function(require,module,exports){
+},{"./socket":31,"engine.io-parser":40}],31:[function(require,module,exports){
 (function (global){
 /**
  * Module dependencies.
@@ -25406,7 +25496,7 @@ Socket.prototype.filterUpgrades = function (upgrades) {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./transport":31,"./transports/index":32,"component-emitter":38,"debug":26,"engine.io-parser":39,"indexof":73,"parsejson":88,"parseqs":89,"parseuri":90}],31:[function(require,module,exports){
+},{"./transport":32,"./transports/index":33,"component-emitter":39,"debug":27,"engine.io-parser":40,"indexof":74,"parsejson":89,"parseqs":90,"parseuri":91}],32:[function(require,module,exports){
 /**
  * Module dependencies.
  */
@@ -25563,7 +25653,7 @@ Transport.prototype.onClose = function () {
   this.emit('close');
 };
 
-},{"component-emitter":38,"engine.io-parser":39}],32:[function(require,module,exports){
+},{"component-emitter":39,"engine.io-parser":40}],33:[function(require,module,exports){
 (function (global){
 /**
  * Module dependencies
@@ -25620,7 +25710,7 @@ function polling (opts) {
 }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./polling-jsonp":33,"./polling-xhr":34,"./websocket":36,"xmlhttprequest-ssl":37}],33:[function(require,module,exports){
+},{"./polling-jsonp":34,"./polling-xhr":35,"./websocket":37,"xmlhttprequest-ssl":38}],34:[function(require,module,exports){
 (function (global){
 
 /**
@@ -25855,7 +25945,7 @@ JSONPPolling.prototype.doWrite = function (data, fn) {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./polling":35,"component-inherit":24}],34:[function(require,module,exports){
+},{"./polling":36,"component-inherit":25}],35:[function(require,module,exports){
 (function (global){
 /**
  * Module requirements.
@@ -26276,7 +26366,7 @@ function unloadHandler () {
 }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./polling":35,"component-emitter":38,"component-inherit":24,"debug":26,"xmlhttprequest-ssl":37}],35:[function(require,module,exports){
+},{"./polling":36,"component-emitter":39,"component-inherit":25,"debug":27,"xmlhttprequest-ssl":38}],36:[function(require,module,exports){
 /**
  * Module dependencies.
  */
@@ -26523,7 +26613,7 @@ Polling.prototype.uri = function () {
   return schema + '://' + (ipv6 ? '[' + this.hostname + ']' : this.hostname) + port + this.path + query;
 };
 
-},{"../transport":31,"component-inherit":24,"debug":26,"engine.io-parser":39,"parseqs":89,"xmlhttprequest-ssl":37,"yeast":110}],36:[function(require,module,exports){
+},{"../transport":32,"component-inherit":25,"debug":27,"engine.io-parser":40,"parseqs":90,"xmlhttprequest-ssl":38,"yeast":111}],37:[function(require,module,exports){
 (function (global){
 /**
  * Module dependencies.
@@ -26801,7 +26891,7 @@ WS.prototype.check = function () {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../transport":31,"component-inherit":24,"debug":26,"engine.io-parser":39,"parseqs":89,"ws":16,"yeast":110}],37:[function(require,module,exports){
+},{"../transport":32,"component-inherit":25,"debug":27,"engine.io-parser":40,"parseqs":90,"ws":17,"yeast":111}],38:[function(require,module,exports){
 (function (global){
 // browser shim for xmlhttprequest module
 
@@ -26842,7 +26932,7 @@ module.exports = function (opts) {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"has-cors":72}],38:[function(require,module,exports){
+},{"has-cors":73}],39:[function(require,module,exports){
 
 /**
  * Expose `Emitter`.
@@ -27008,7 +27098,7 @@ Emitter.prototype.hasListeners = function(event){
   return !! this.listeners(event).length;
 };
 
-},{}],39:[function(require,module,exports){
+},{}],40:[function(require,module,exports){
 (function (global){
 /**
  * Module dependencies.
@@ -27621,7 +27711,7 @@ exports.decodePayloadAsBinary = function (data, binaryType, callback) {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./keys":40,"after":7,"arraybuffer.slice":9,"base64-arraybuffer":13,"blob":14,"has-binary":41,"wtf-8":109}],40:[function(require,module,exports){
+},{"./keys":41,"after":8,"arraybuffer.slice":10,"base64-arraybuffer":14,"blob":15,"has-binary":42,"wtf-8":110}],41:[function(require,module,exports){
 
 /**
  * Gets the keys for an object.
@@ -27642,7 +27732,7 @@ module.exports = Object.keys || function keys (obj){
   return arr;
 };
 
-},{}],41:[function(require,module,exports){
+},{}],42:[function(require,module,exports){
 (function (global){
 
 /*
@@ -27704,12 +27794,12 @@ function hasBinary(data) {
 }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"isarray":42}],42:[function(require,module,exports){
+},{"isarray":43}],43:[function(require,module,exports){
 module.exports = Array.isArray || function (arr) {
   return Object.prototype.toString.call(arr) == '[object Array]';
 };
 
-},{}],43:[function(require,module,exports){
+},{}],44:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -27892,7 +27982,7 @@ function recalculateHSV(color) {
 
 }
 
-},{"../utils/common.js":60,"./interpret.js":44,"./math.js":45,"./toString.js":46}],44:[function(require,module,exports){
+},{"../utils/common.js":61,"./interpret.js":45,"./math.js":46,"./toString.js":47}],45:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -28235,7 +28325,7 @@ function createInterpert() {
 
 }
 
-},{"../utils/common.js":60,"./toString.js":46}],45:[function(require,module,exports){
+},{"../utils/common.js":61,"./toString.js":47}],46:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -28336,7 +28426,7 @@ function math() {
   };
 }
 
-},{}],46:[function(require,module,exports){
+},{}],47:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -28373,7 +28463,7 @@ function toString(color) {
 
 }
 
-},{"../utils/common.js":60}],47:[function(require,module,exports){
+},{"../utils/common.js":61}],48:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -28457,7 +28547,7 @@ common.extend(
   }
 );
 
-},{"../dom/dom.js":58,"../utils/common.js":60,"./Controller.js":49}],48:[function(require,module,exports){
+},{"../dom/dom.js":59,"../utils/common.js":61,"./Controller.js":50}],49:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -28778,7 +28868,7 @@ function hueGradient(elem) {
   elem.style.cssText += 'background: linear-gradient(top,  #ff0000 0%,#ff00ff 17%,#0000ff 34%,#00ffff 50%,#00ff00 67%,#ffff00 84%,#ff0000 100%);'
 }
 
-},{"../color/Color.js":43,"../color/interpret.js":44,"../dom/dom.js":58,"../utils/common.js":60,"./Controller.js":49}],49:[function(require,module,exports){
+},{"../color/Color.js":44,"../color/interpret.js":45,"../dom/dom.js":59,"../utils/common.js":61,"./Controller.js":50}],50:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -28919,7 +29009,7 @@ common.extend(
 );
 
 
-},{"../utils/common.js":60,"../utils/escapeHtml.js":62}],50:[function(require,module,exports){
+},{"../utils/common.js":61,"../utils/escapeHtml.js":63}],51:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -28989,7 +29079,7 @@ common.extend(
 
 );
 
-},{"../dom/dom.js":58,"../utils/common.js":60,"./Controller.js":49}],51:[function(require,module,exports){
+},{"../dom/dom.js":59,"../utils/common.js":61,"./Controller.js":50}],52:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -29131,7 +29221,7 @@ function numDecimals(x) {
   }
 }
 
-},{"../utils/common.js":60,"./Controller.js":49}],52:[function(require,module,exports){
+},{"../utils/common.js":61,"./Controller.js":50}],53:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -29262,7 +29352,7 @@ function roundToDecimal(value, decimals) {
   return Math.round(value * tenTo) / tenTo;
 }
 
-},{"../dom/dom.js":58,"../utils/common.js":60,"./NumberController.js":51}],53:[function(require,module,exports){
+},{"../dom/dom.js":59,"../utils/common.js":61,"./NumberController.js":52}],54:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -29392,7 +29482,7 @@ function map(v, i1, i2, o1, o2) {
   return o1 + (o2 - o1) * ((v - i1) / (i2 - i1));
 }
 
-},{"../dom/dom.js":58,"../utils/common.js":60,"../utils/css.js":61,"./NumberController.js":51}],54:[function(require,module,exports){
+},{"../dom/dom.js":59,"../utils/common.js":61,"../utils/css.js":62,"./NumberController.js":52}],55:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -29492,7 +29582,7 @@ common.extend(
 
 );
 
-},{"../dom/dom.js":58,"../utils/common.js":60,"./Controller.js":49}],55:[function(require,module,exports){
+},{"../dom/dom.js":59,"../utils/common.js":61,"./Controller.js":50}],56:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -29579,7 +29669,7 @@ common.extend(
 
 );
 
-},{"../dom/dom.js":58,"../utils/common.js":60,"./Controller.js":49}],56:[function(require,module,exports){
+},{"../dom/dom.js":59,"../utils/common.js":61,"./Controller.js":50}],57:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -29645,7 +29735,7 @@ function factory(object, property) {
 
 }
 
-},{"../utils/common.js":60,"./BooleanController.js":47,"./FunctionController.js":50,"./NumberControllerBox.js":52,"./NumberControllerSlider.js":53,"./OptionController.js":54,"./StringController.js":55}],57:[function(require,module,exports){
+},{"../utils/common.js":61,"./BooleanController.js":48,"./FunctionController.js":51,"./NumberControllerBox.js":53,"./NumberControllerSlider.js":54,"./OptionController.js":55,"./StringController.js":56}],58:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -29759,7 +29849,7 @@ function lockScroll(e) {
   console.log(e);
 }
 
-},{"../utils/common.js":60,"./dom.js":58}],58:[function(require,module,exports){
+},{"../utils/common.js":61,"./dom.js":59}],59:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -30046,7 +30136,7 @@ var dom = {
 
 module.exports = dom;
 
-},{"../utils/common.js":60}],59:[function(require,module,exports){
+},{"../utils/common.js":61}],60:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -31448,7 +31538,7 @@ function createGUI() {
   return GUI;
 }
 
-},{"../controllers/BooleanController.js":47,"../controllers/ColorController.js":48,"../controllers/Controller.js":49,"../controllers/FunctionController.js":50,"../controllers/NumberControllerBox.js":52,"../controllers/NumberControllerSlider.js":53,"../controllers/factory.js":56,"../dom/CenteredDiv.js":57,"../dom/dom.js":58,"../utils/common.js":60,"../utils/css.js":61,"../utils/requestAnimationFrame.js":63}],60:[function(require,module,exports){
+},{"../controllers/BooleanController.js":48,"../controllers/ColorController.js":49,"../controllers/Controller.js":50,"../controllers/FunctionController.js":51,"../controllers/NumberControllerBox.js":53,"../controllers/NumberControllerSlider.js":54,"../controllers/factory.js":57,"../dom/CenteredDiv.js":58,"../dom/dom.js":59,"../utils/common.js":61,"../utils/css.js":62,"../utils/requestAnimationFrame.js":64}],61:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -31590,7 +31680,7 @@ function common() {
   };
 }
 
-},{}],61:[function(require,module,exports){
+},{}],62:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -31625,7 +31715,7 @@ function css() {
   };
 }
 
-},{}],62:[function(require,module,exports){
+},{}],63:[function(require,module,exports){
 module.exports = escape;
 
 var entityMap = {
@@ -31643,7 +31733,7 @@ function escape(string) {
   });
 }
 
-},{}],63:[function(require,module,exports){
+},{}],64:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -31676,7 +31766,7 @@ function raf() {
       };
 }
 
-},{}],64:[function(require,module,exports){
+},{}],65:[function(require,module,exports){
 /** @license
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -31716,7 +31806,7 @@ module.exports = {
   GUI: require('./dat/gui/GUI.js')
 };
 
-},{"./dat/color/Color.js":43,"./dat/color/interpret.js":44,"./dat/color/math.js":45,"./dat/controllers/BooleanController.js":47,"./dat/controllers/ColorController.js":48,"./dat/controllers/Controller.js":49,"./dat/controllers/FunctionController.js":50,"./dat/controllers/NumberController.js":51,"./dat/controllers/NumberControllerBox.js":52,"./dat/controllers/NumberControllerSlider.js":53,"./dat/controllers/OptionController.js":54,"./dat/controllers/StringController.js":55,"./dat/dom/dom.js":58,"./dat/gui/GUI.js":59}],65:[function(require,module,exports){
+},{"./dat/color/Color.js":44,"./dat/color/interpret.js":45,"./dat/color/math.js":46,"./dat/controllers/BooleanController.js":48,"./dat/controllers/ColorController.js":49,"./dat/controllers/Controller.js":50,"./dat/controllers/FunctionController.js":51,"./dat/controllers/NumberController.js":52,"./dat/controllers/NumberControllerBox.js":53,"./dat/controllers/NumberControllerSlider.js":54,"./dat/controllers/OptionController.js":55,"./dat/controllers/StringController.js":56,"./dat/dom/dom.js":59,"./dat/gui/GUI.js":60}],66:[function(require,module,exports){
 module.exports = add
 
 /**
@@ -31732,7 +31822,7 @@ function add(out, a, b) {
     out[1] = a[1] + b[1]
     return out
 }
-},{}],66:[function(require,module,exports){
+},{}],67:[function(require,module,exports){
 module.exports = dot
 
 /**
@@ -31745,7 +31835,7 @@ module.exports = dot
 function dot(a, b) {
     return a[0] * b[0] + a[1] * b[1]
 }
-},{}],67:[function(require,module,exports){
+},{}],68:[function(require,module,exports){
 module.exports = normalize
 
 /**
@@ -31767,7 +31857,7 @@ function normalize(out, a) {
     }
     return out
 }
-},{}],68:[function(require,module,exports){
+},{}],69:[function(require,module,exports){
 module.exports = set
 
 /**
@@ -31783,7 +31873,7 @@ function set(out, x, y) {
     out[1] = y
     return out
 }
-},{}],69:[function(require,module,exports){
+},{}],70:[function(require,module,exports){
 module.exports = subtract
 
 /**
@@ -31799,7 +31889,7 @@ function subtract(out, a, b) {
     out[1] = a[1] - b[1]
     return out
 }
-},{}],70:[function(require,module,exports){
+},{}],71:[function(require,module,exports){
 (function (global){
 
 /*
@@ -31862,9 +31952,9 @@ function hasBinary(data) {
 }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"isarray":71}],71:[function(require,module,exports){
-arguments[4][42][0].apply(exports,arguments)
-},{"dup":42}],72:[function(require,module,exports){
+},{"isarray":72}],72:[function(require,module,exports){
+arguments[4][43][0].apply(exports,arguments)
+},{"dup":43}],73:[function(require,module,exports){
 
 /**
  * Module exports.
@@ -31883,7 +31973,7 @@ try {
   module.exports = false;
 }
 
-},{}],73:[function(require,module,exports){
+},{}],74:[function(require,module,exports){
 
 var indexOf = [].indexOf;
 
@@ -31894,7 +31984,7 @@ module.exports = function(arr, obj){
   }
   return -1;
 };
-},{}],74:[function(require,module,exports){
+},{}],75:[function(require,module,exports){
 if (typeof Object.create === 'function') {
   // implementation from standard node.js 'util' module
   module.exports = function inherits(ctor, superCtor) {
@@ -31919,7 +32009,7 @@ if (typeof Object.create === 'function') {
   }
 }
 
-},{}],75:[function(require,module,exports){
+},{}],76:[function(require,module,exports){
 /*!
  * jQuery JavaScript Library v3.0.0 -ajax,-ajax/jsonp,-ajax/load,-ajax/parseXML,-ajax/script,-ajax/var/location,-ajax/var/nonce,-ajax/var/rquery,-ajax/xhr,-manipulation/_evalUrl,-event/ajax,-effects,-effects/Tween,-effects/animatedSelector,-deprecated
  * https://jquery.com/
@@ -39853,7 +39943,7 @@ if ( !noGlobal ) {
 return jQuery;
 } ) );
 
-},{}],76:[function(require,module,exports){
+},{}],77:[function(require,module,exports){
 /*!
  * jQuery JavaScript Library v3.1.1
  * https://jquery.com/
@@ -50075,7 +50165,7 @@ if ( !noGlobal ) {
 return jQuery;
 } );
 
-},{}],77:[function(require,module,exports){
+},{}],78:[function(require,module,exports){
 (function (global){
 /*! JSON v3.3.2 | http://bestiejs.github.io/json3 | Copyright 2012-2014, Kit Cambridge | http://kit.mit-license.org */
 ;(function () {
@@ -50981,11 +51071,11 @@ return jQuery;
 }).call(this);
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],78:[function(require,module,exports){
+},{}],79:[function(require,module,exports){
 var _ = require('./lodash.min').runInContext();
 module.exports = require('./fp/_baseConvert')(_, _);
 
-},{"./fp/_baseConvert":79,"./lodash.min":83}],79:[function(require,module,exports){
+},{"./fp/_baseConvert":80,"./lodash.min":84}],80:[function(require,module,exports){
 var mapping = require('./_mapping'),
     fallbackHolder = require('./placeholder');
 
@@ -51523,7 +51613,7 @@ function baseConvert(util, name, func, options) {
 
 module.exports = baseConvert;
 
-},{"./_mapping":80,"./placeholder":81}],80:[function(require,module,exports){
+},{"./_mapping":81,"./placeholder":82}],81:[function(require,module,exports){
 /** Used to map aliases to their real names. */
 exports.aliasToReal = {
 
@@ -51892,7 +51982,7 @@ exports.skipRearg = {
   'zipObjectDeep': true
 };
 
-},{}],81:[function(require,module,exports){
+},{}],82:[function(require,module,exports){
 /**
  * The default argument placeholder value for methods.
  *
@@ -51900,7 +51990,7 @@ exports.skipRearg = {
  */
 module.exports = {};
 
-},{}],82:[function(require,module,exports){
+},{}],83:[function(require,module,exports){
 (function (global){
 /**
  * @license
@@ -68922,7 +69012,7 @@ module.exports = {};
 }.call(this));
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],83:[function(require,module,exports){
+},{}],84:[function(require,module,exports){
 (function (global){
 /**
  * @license
@@ -69060,7 +69150,7 @@ c=0,a=Li(n,this.__takeCount__),!e||200>i||i==n&&a==n)return Ar(t,this.__actions_
 return{done:n,value:n?F:this.__values__[this.__index__++]}},On.prototype.plant=function(n){for(var t,r=this;r instanceof Sn;){var e=Te(r);e.__index__=0,e.__values__=F,t?u.__wrapped__=e:t=e;var u=e,r=r.__wrapped__}return u.__wrapped__=n,t},On.prototype.reverse=function(){var n=this.__wrapped__;return n instanceof Mn?(this.__actions__.length&&(n=new Mn(this)),n=n.reverse(),n.__actions__.push({func:Je,args:[Ve],thisArg:F}),new zn(n,this.__chain__)):this.thru(Ve)},On.prototype.toJSON=On.prototype.valueOf=On.prototype.value=function(){
 return Ar(this.__wrapped__,this.__actions__)},On.prototype.first=On.prototype.head,xi&&(On.prototype[xi]=Ye),On}();typeof define=="function"&&typeof define.amd=="object"&&define.amd?(Zn._=it, define(function(){return it})):Vn?((Vn.exports=it)._=it,qn._=it):Zn._=it}).call(this);
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],84:[function(require,module,exports){
+},{}],85:[function(require,module,exports){
 /**
  * Helpers.
  */
@@ -69187,7 +69277,7 @@ function plural(ms, n, name) {
   return Math.ceil(ms / n) + ' ' + name + 's';
 }
 
-},{}],85:[function(require,module,exports){
+},{}],86:[function(require,module,exports){
 var getBounds = require('bound-points')
 var unlerp = require('unlerp')
 
@@ -69220,7 +69310,7 @@ function normalizePathScale (positions, bounds) {
   }
   return positions
 }
-},{"bound-points":15,"unlerp":108}],86:[function(require,module,exports){
+},{"bound-points":16,"unlerp":109}],87:[function(require,module,exports){
 (function (global){
 "use strict";
 
@@ -73648,7 +73738,7 @@ numeric.svd= function svd(A) {
 
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],87:[function(require,module,exports){
+},{}],88:[function(require,module,exports){
 'use strict';
 /* eslint-disable no-unused-vars */
 var hasOwnProperty = Object.prototype.hasOwnProperty;
@@ -73733,7 +73823,7 @@ module.exports = shouldUseNative() ? Object.assign : function (target, source) {
 	return to;
 };
 
-},{}],88:[function(require,module,exports){
+},{}],89:[function(require,module,exports){
 (function (global){
 /**
  * JSON parse.
@@ -73768,7 +73858,7 @@ module.exports = function parsejson(data) {
   }
 };
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],89:[function(require,module,exports){
+},{}],90:[function(require,module,exports){
 /**
  * Compiles a querystring
  * Returns string representation of the object
@@ -73807,7 +73897,7 @@ exports.decode = function(qs){
   return qry;
 };
 
-},{}],90:[function(require,module,exports){
+},{}],91:[function(require,module,exports){
 /**
  * Parses an URI
  *
@@ -73848,7 +73938,7 @@ module.exports = function parseuri(str) {
     return uri;
 };
 
-},{}],91:[function(require,module,exports){
+},{}],92:[function(require,module,exports){
 var add = require('gl-vec2/add')
 var set = require('gl-vec2/set')
 var normalize = require('gl-vec2/normalize')
@@ -73882,7 +73972,7 @@ module.exports.direction = function direction(out, a, b) {
     normalize(out, out)
     return out
 }
-},{"gl-vec2/add":65,"gl-vec2/dot":66,"gl-vec2/normalize":67,"gl-vec2/set":68,"gl-vec2/subtract":69}],92:[function(require,module,exports){
+},{"gl-vec2/add":66,"gl-vec2/dot":67,"gl-vec2/normalize":68,"gl-vec2/set":69,"gl-vec2/subtract":70}],93:[function(require,module,exports){
 var util = require('polyline-miter-util')
 
 var lineA = [0, 0]
@@ -73950,7 +74040,7 @@ module.exports = function(points, closed) {
 function addNext(out, normal, length) {
     out.push([[normal[0], normal[1]], length])
 }
-},{"polyline-miter-util":91}],93:[function(require,module,exports){
+},{"polyline-miter-util":92}],94:[function(require,module,exports){
 
 /**
  * Module dependencies.
@@ -74061,7 +74151,7 @@ exports.connect = lookup;
 exports.Manager = require('./manager');
 exports.Socket = require('./socket');
 
-},{"./manager":94,"./socket":96,"./url":97,"debug":26,"socket.io-parser":99}],94:[function(require,module,exports){
+},{"./manager":95,"./socket":97,"./url":98,"debug":27,"socket.io-parser":100}],95:[function(require,module,exports){
 
 /**
  * Module dependencies.
@@ -74623,7 +74713,7 @@ Manager.prototype.onreconnect = function () {
   this.emitAll('reconnect', attempt);
 };
 
-},{"./on":95,"./socket":96,"backo2":12,"component-bind":22,"component-emitter":23,"debug":26,"engine.io-client":28,"indexof":73,"socket.io-parser":99}],95:[function(require,module,exports){
+},{"./on":96,"./socket":97,"backo2":13,"component-bind":23,"component-emitter":24,"debug":27,"engine.io-client":29,"indexof":74,"socket.io-parser":100}],96:[function(require,module,exports){
 
 /**
  * Module exports.
@@ -74649,7 +74739,7 @@ function on (obj, ev, fn) {
   };
 }
 
-},{}],96:[function(require,module,exports){
+},{}],97:[function(require,module,exports){
 
 /**
  * Module dependencies.
@@ -75070,7 +75160,7 @@ Socket.prototype.compress = function (compress) {
   return this;
 };
 
-},{"./on":95,"component-bind":22,"component-emitter":23,"debug":26,"has-binary":70,"socket.io-parser":99,"to-array":106}],97:[function(require,module,exports){
+},{"./on":96,"component-bind":23,"component-emitter":24,"debug":27,"has-binary":71,"socket.io-parser":100,"to-array":107}],98:[function(require,module,exports){
 (function (global){
 
 /**
@@ -75149,7 +75239,7 @@ function url (uri, loc) {
 }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"debug":26,"parseuri":90}],98:[function(require,module,exports){
+},{"debug":27,"parseuri":91}],99:[function(require,module,exports){
 (function (global){
 /*global Blob,File*/
 
@@ -75294,7 +75384,7 @@ exports.removeBlobs = function(data, callback) {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./is-buffer":100,"isarray":102}],99:[function(require,module,exports){
+},{"./is-buffer":101,"isarray":103}],100:[function(require,module,exports){
 
 /**
  * Module dependencies.
@@ -75700,7 +75790,7 @@ function error(data){
   };
 }
 
-},{"./binary":98,"./is-buffer":100,"component-emitter":101,"debug":26,"json3":77}],100:[function(require,module,exports){
+},{"./binary":99,"./is-buffer":101,"component-emitter":102,"debug":27,"json3":78}],101:[function(require,module,exports){
 (function (global){
 
 module.exports = isBuf;
@@ -75717,11 +75807,11 @@ function isBuf(obj) {
 }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],101:[function(require,module,exports){
-arguments[4][38][0].apply(exports,arguments)
-},{"dup":38}],102:[function(require,module,exports){
-arguments[4][42][0].apply(exports,arguments)
-},{"dup":42}],103:[function(require,module,exports){
+},{}],102:[function(require,module,exports){
+arguments[4][39][0].apply(exports,arguments)
+},{"dup":39}],103:[function(require,module,exports){
+arguments[4][43][0].apply(exports,arguments)
+},{"dup":43}],104:[function(require,module,exports){
 // stats.js - http://github.com/mrdoob/stats.js
 var Stats=function(){var l=Date.now(),m=l,g=0,n=Infinity,o=0,h=0,p=Infinity,q=0,r=0,s=0,f=document.createElement("div");f.id="stats";f.addEventListener("mousedown",function(b){b.preventDefault();t(++s%2)},!1);f.style.cssText="width:80px;opacity:0.9;cursor:pointer";var a=document.createElement("div");a.id="fps";a.style.cssText="padding:0 0 3px 3px;text-align:left;background-color:#002";f.appendChild(a);var i=document.createElement("div");i.id="fpsText";i.style.cssText="color:#0ff;font-family:Helvetica,Arial,sans-serif;font-size:9px;font-weight:bold;line-height:15px";
 i.innerHTML="FPS";a.appendChild(i);var c=document.createElement("div");c.id="fpsGraph";c.style.cssText="position:relative;width:74px;height:30px;background-color:#0ff";for(a.appendChild(c);74>c.children.length;){var j=document.createElement("span");j.style.cssText="width:1px;height:30px;float:left;background-color:#113";c.appendChild(j)}var d=document.createElement("div");d.id="ms";d.style.cssText="padding:0 0 3px 3px;text-align:left;background-color:#020;display:none";f.appendChild(d);var k=document.createElement("div");
@@ -75729,7 +75819,7 @@ k.id="msText";k.style.cssText="color:#0f0;font-family:Helvetica,Arial,sans-serif
 "block";d.style.display="none";break;case 1:a.style.display="none",d.style.display="block"}};return{REVISION:12,domElement:f,setMode:t,begin:function(){l=Date.now()},end:function(){var b=Date.now();g=b-l;n=Math.min(n,g);o=Math.max(o,g);k.textContent=g+" MS ("+n+"-"+o+")";var a=Math.min(30,30-30*(g/200));e.appendChild(e.firstChild).style.height=a+"px";r++;b>m+1E3&&(h=Math.round(1E3*r/(b-m)),p=Math.min(p,h),q=Math.max(q,h),i.textContent=h+" FPS ("+p+"-"+q+")",a=Math.min(30,30-30*(h/100)),c.appendChild(c.firstChild).style.height=
 a+"px",m=b,r=0);return b},update:function(){l=this.end()}}};"object"===typeof module&&(module.exports=Stats);
 
-},{}],104:[function(require,module,exports){
+},{}],105:[function(require,module,exports){
 module.exports = function(THREE) {
 	var MOUSE = THREE.MOUSE
 	if (!MOUSE)
@@ -76850,7 +76940,7 @@ module.exports = function(THREE) {
 	return OrbitControls;
 }
 
-},{}],105:[function(require,module,exports){
+},{}],106:[function(require,module,exports){
 (function (global, factory) {
     typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports) :
     typeof define === 'function' && define.amd ? define(['exports'], factory) :
@@ -118643,7 +118733,7 @@ module.exports = function(THREE) {
     Object.defineProperty(exports, '__esModule', { value: true });
 
 })));
-},{}],106:[function(require,module,exports){
+},{}],107:[function(require,module,exports){
 module.exports = toArray
 
 function toArray(list, index) {
@@ -118658,7 +118748,7 @@ function toArray(list, index) {
     return array
 }
 
-},{}],107:[function(require,module,exports){
+},{}],108:[function(require,module,exports){
 //     Underscore.js 1.8.3
 //     http://underscorejs.org
 //     (c) 2009-2015 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
@@ -120208,11 +120298,11 @@ function toArray(list, index) {
   }
 }.call(this));
 
-},{}],108:[function(require,module,exports){
+},{}],109:[function(require,module,exports){
 module.exports = function range(min, max, value) {
   return (value - min) / (max - min)
 }
-},{}],109:[function(require,module,exports){
+},{}],110:[function(require,module,exports){
 (function (global){
 /*! https://mths.be/wtf8 v1.0.0 by @mathias */
 ;(function(root) {
@@ -120450,7 +120540,7 @@ module.exports = function range(min, max, value) {
 }(this));
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],110:[function(require,module,exports){
+},{}],111:[function(require,module,exports){
 'use strict';
 
 var alphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_'.split('')
@@ -120520,7 +120610,354 @@ yeast.encode = encode;
 yeast.decode = decode;
 module.exports = yeast;
 
-},{}],111:[function(require,module,exports){
+},{}],112:[function(require,module,exports){
+const d3 = require("d3");
+
+
+module.exports = (THREE) => {
+    class PlaneTransform {
+        constructor(canvas_element, control_handles_element){
+            /*
+             * datgui is messing up the camera to world space action if two
+             * points are the same, the texture disappears plane jumps to other
+             * side.
+             */
+            this.frame = 0;
+            this.displayHandles = false;
+            this.prevDisplayHandles = true;
+            this.updatePos = true;
+            this.canvas_element = canvas_element;
+            this.control_handles_element = control_handles_element;
+            document.addEventListener("keydown", (event) =>
+                                      this.onDocumentKeyDown(event), false);
+            document.addEventListener("keyup", (event) =>
+                                      this.onDocumentKeyUp(event), false);
+
+            this.init();
+        }
+
+        init(){
+            /* global variables
+             var camera, scene, renderer, geometry, prevPos, updatePos;
+             var savedGeometryPosition
+             var video, videoTexture;
+             var controlPoints, pointsUI;*/
+
+            var mesh, customMaterial;
+            var width = window.innerWidth;
+            var height = window.innerHeight;
+            this.sceneWidth = width;
+            this.sceneHeight = height;
+
+            this.controlPoints = [{
+                x: .9 * width,
+                y: .1 * height
+            }, {
+                x: .9 * width,
+                y: .9 * height
+            }, {
+                x: .1 * width,
+                y: .9 * height
+            }, {
+                x: .1 * width,
+                y: .1 * height
+            }];
+
+            $(this.canvas_element).attr("width", width);
+            $(this.canvas_element).attr("height", height);
+            $(this.control_handles_element).width(width);
+            $(this.control_handles_element).height(height);
+
+            this.pointsUI =
+                ControlPointsUI()(d3.select(this.control_handles_element)
+                                  .selectAll('circle')
+                                  .data(this.controlPoints)).radius(10);
+
+            this.scene = new THREE.Scene();
+            this.camera = new THREE.PerspectiveCamera(50, width / height, 1,
+                                                      10000);
+            this.camera.position.z = this.sceneWidth;
+            this.scene.add(this.camera);
+
+            //webcam detection
+            this.video = document.createElement("video");
+            var video = this.video;
+            var hasUserMedia = navigator.webkitGetUserMedia ? true : false;
+            navigator.webkitGetUserMedia(
+                {video: {optional: [{minWidth: 320},
+                                    {minWidth: 640},
+                                    {minWidth: 1024},
+                                    {minWidth: 1280},
+                                    {minWidth: 1920},
+                                    {minWidth: 2560}]}},
+                (stream) => {
+                    this.video.src = webkitURL.createObjectURL(stream);
+                    this.initVideo();
+                }, function(error){
+                console.log("Failed to get a stream due to", error);
+            });
+
+            this.renderer = new THREE.WebGLRenderer({canvas: this.canvas_element});
+            this.renderer.render(this.scene, this.camera);
+
+            //draw the plane and add diagonal ratios
+            this.geometry = new THREE.PlaneBufferGeometry(width, height, 1, 1);
+            var diagonalRatios = new Float32Array(4);
+            for (var i = 0; i < 4; i++) {
+                diagonalRatios[0] = 1.0;
+            }
+            this.geometry.addAttribute('diagonalRatio', new
+                                       THREE.BufferAttribute(diagonalRatios, 1));
+        }
+
+        initVideo() {
+            //add video texture
+            this.videoTexture = new THREE.Texture(this.video);
+            this.videoTexture.minFilter = THREE.NearestFilter;
+            this.videoTexture.magFilter = THREE.NearestFilter;
+
+            var customUniforms = {
+                uSampler: {
+                type: "t",
+                value: this.videoTexture
+                },
+            };
+
+            var vertexShader = `
+            varying vec4 textureCoord;
+            attribute float diagonalRatio;
+            void main() {
+                textureCoord = vec4(uv.xy, 0.0, 1.0);
+                textureCoord.w = diagonalRatio;
+                textureCoord.xy *= textureCoord.w;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }`;
+
+            var fragmentShader = `
+            uniform sampler2D uSampler;
+            varying vec4 textureCoord;
+            void main() {
+                gl_FragColor = texture2D(uSampler, textureCoord.xy/textureCoord.w);
+            }`;
+
+            var customMaterial = new THREE.ShaderMaterial({
+                uniforms: customUniforms,
+                side: THREE.DoubleSide,
+                vertexShader: vertexShader,
+                fragmentShader: fragmentShader
+            });
+
+            this.mesh = new THREE.Mesh(this.geometry, customMaterial);
+            this.scene.add(this.mesh);
+
+            var diagonalRatios = this.calculateDiagonalRatios();
+            if(diagonalRatios){
+                for (var i = 0; i < 4; i++) {
+                    this.geometry.attributes.diagonalRatio.array[i] = diagonalRatios[i];
+                }
+            }
+            this.pointsUI.on("changed", (d) => this.onControlPointChange(d));
+        }
+
+        onControlPointChange(d){
+            //d consists of points x, y and index
+            var posArray = [];
+
+            //canvas space to camera space
+            for (var i = 0; i < this.controlPoints.length; i++) {
+                var vector = new THREE.Vector3((this.controlPoints[i].x / this.sceneWidth) * 2 - 1,
+                                                 -(this.controlPoints[i].y / this.sceneHeight) * 2 + 1, 0.5);
+                vector.unproject(this.camera);
+                var dir = vector.sub(this.camera.position).normalize();
+                var distance = -this.camera.position.z / dir.z;
+                var pos = this.camera.position.clone().add(dir.multiplyScalar(distance));
+                posArray.push(pos.x);
+                posArray.push(pos.y);
+            }
+
+            if(this.updatePos){
+                if(!this.prevPos)
+                    this.prevPos = $.extend(true, [], posArray);
+                var transform = PerspT(posArray, this.prevPos).coeffsInv;
+
+                var geoPos = this.getUpdatedPosArray(this.geometry.attributes.position.array, transform, 3);
+                for (var i = 0; i < geoPos.length; i++){
+                    this.geometry.attributes.position.array[i] = geoPos[i];
+                }
+            }
+            this.prevPos = $.extend(true, [], posArray);
+
+            //new diagonal ratios
+            var diagonalRatios = this.calculateDiagonalRatios();
+            if(diagonalRatios){
+                for (var i = 0; i < diagonalRatios.length; i++) {
+                    this.geometry.attributes.diagonalRatio.array[i] = diagonalRatios[i];
+                }
+            }
+
+        }
+
+        remapControlHandles(){
+            if(this.savedGeometryPosition){
+                var newControlPos = this.cameraToScreen(this.geometry.attributes.position.array);
+                var transform = PerspT(this.savedGeometryPosition, newControlPos).coeffs;
+
+                var controlPointsArray = [];
+                for(var i = 0; i < this.controlPoints.length; i++){
+                    controlPointsArray.push(this.controlPoints[i].x);
+                    controlPointsArray.push(this.controlPoints[i].y);
+                }
+                var newControlPoints = this.getUpdatedPosArray(controlPointsArray, transform, 2);
+                for(var i = 0; i < this.controlPoints.length; i++){
+                    this.controlPoints[i].x = newControlPoints[2*i];
+                    this.controlPoints[i].y = newControlPoints[2*i + 1];
+                }
+
+                this.pointsUI =
+                ControlPointsUI()(d3.select(this.control_handles_element)
+                                  .selectAll('circle')
+                                  .data(this.controlPoints)).radius(10);
+            }
+        }
+
+        cameraToScreen(array){
+            var screenCoords = [];
+
+            for(var i = 0; i < array.length/3; i++){
+                var vector = new THREE.Vector3(array[3*i], array[3*i+1], array[3*i+2]);
+                vector.project(this.camera);
+                screenCoords.push((vector.x + 1)*this.sceneWidth/2);
+                screenCoords.push((-vector.y + 1)*this.sceneHeight/2);
+            }
+            return screenCoords;
+        }
+
+        update() {
+            //datgui handling
+            if(this.displayHandles){
+                if(!this.prevDisplayHandles)
+                    this.remapControlHandles();
+                $(this.control_handles_element).show();
+            }
+            else{
+                if(this.prevDisplayHandles){
+                    this.savedGeometryPosition = this.cameraToScreen(this.geometry.attributes.position.array);
+                }
+                $(this.control_handles_element).hide();
+            }
+            //so some updates only happen on toggle
+            this.prevDisplayHandles = this.displayHandles;
+
+            this.frame += 1;
+            if( this.video.readyState === this.video.HAVE_ENOUGH_DATA ){
+                this.videoTexture.needsUpdate = true;
+            }
+            this.geometry.attributes.position.needsUpdate = true;
+            this.geometry.attributes.diagonalRatio.needsUpdate = true;
+            this.renderer.render(this.scene, this.camera);
+        }
+
+        onDocumentKeyDown(event){
+            var keyCode = event.which;
+            if(keyCode == 16){
+                this.updatePos = false;
+            }
+        }
+
+        onDocumentKeyUp(event){
+            var keyCode = event.which;
+            if(keyCode == 16){
+                this.updatePos = true;
+            }
+        }
+
+        calculateDiagonalRatios(){
+            if(this.geometry === undefined)
+                return false;
+
+            //four corners (top right, bottom right... etc)
+            var tr, br, tl, bl;
+            tr = [this.geometry.attributes.position.array[3], this.geometry.attributes.position.array[4]];
+            br = [this.geometry.attributes.position.array[9], this.geometry.attributes.position.array[10]]
+            bl = [this.geometry.attributes.position.array[6], this.geometry.attributes.position.array[7]]
+            tl = [this.geometry.attributes.position.array[0], this.geometry.attributes.position.array[1]]
+            var slope1 = (tr[1] - bl[1])/(tr[0] - bl[0]);
+            var slope2 = (tl[1] - br[1])/(tl[0] - br[0]);
+
+            if (slope1 == slope2)
+                return false;
+
+            var intx = (tr[1] - tl[1] - (slope1*tr[0] - slope2*tl[0]))/(slope2 - slope1);
+            var inty = slope1*(intx - tr[0]) + tr[1];
+
+            var dis1 = this.calculateDistance(intx, inty, tr[0], tr[1]);
+            var dis2 = this.calculateDistance(intx, inty, br[0], br[1]);
+            var dis3 = this.calculateDistance(intx, inty, tl[0], tl[1]);
+            var dis4 = this.calculateDistance(intx, inty, bl[0], bl[1]);
+
+            if(!(dis1 && dis2 && dis3 && dis4))
+                return false;
+
+            return [(dis2 + dis3)/dis2, (dis1 + dis4)/dis4, (dis1 + dis4)/dis1, (dis2 + dis3)/dis3];
+        }
+
+        calculateDistance(x1, y1, x2, y2){
+            return Math.sqrt((x1 - x2)*(x1 - x2) + (y1 - y2)*(y1 - y2));
+        }
+
+        getUpdatedPos(x, y, M){
+            var W = x*M[6] + y*M[7] + M[8];
+            var X = x*M[0]/W + y*M[1]/W + M[2]/W;
+            var Y = x*M[3]/W + y*M[4]/W + M[5]/W;
+            return [X, Y];
+        }
+
+        getUpdatedPosArray(array, M, dim){
+            var newArray = [];
+
+            for(var i = 0; i < array.length/dim; i ++){
+                var result = this.getUpdatedPos(array[dim*i], array[dim*i+1], M);
+                newArray.push(result[0]);
+                newArray.push(result[1]);
+                if(dim == 3)
+                    newArray.push(0.0);
+            }
+            return newArray;
+        }
+
+        rotateLeft(){
+            this.controlPoints.unshift(this.controlPoints.pop());
+            this.onControlPointChange(null);
+        }
+
+        rotateRight(){
+            this.controlPoints.push(this.controlPoints.shift());
+            this.onControlPointChange(null);
+        }
+
+        flipHorizontal(){
+            //1234-> 4321
+            this.rotateRight();
+            var temp = this.controlPoints[1];
+            this.controlPoints[1] = this.controlPoints[3];
+            this.controlPoints[3] = temp;
+            this.onControlPointChange(null);
+        }
+
+        flipVertical(){
+            //1234-> 2143
+            this.rotateLeft();
+            var temp = this.controlPoints[1];
+            this.controlPoints[1] = this.controlPoints[3];
+            this.controlPoints[3] = temp;
+            this.onControlPointChange(null);
+        }
+    }
+
+    return PlaneTransform;
+}
+
+},{"d3":26}],113:[function(require,module,exports){
 var assign = require('object-assign');
 
 module.exports = function (THREE) {
@@ -120572,7 +121009,7 @@ module.exports = function (THREE) {
   };
 };
 
-},{"object-assign":87}],112:[function(require,module,exports){
+},{"object-assign":88}],114:[function(require,module,exports){
 (function (global){
 /*
  * Currently, ``browserify-shim`` is used for ``two.js``, as described [here][1].
@@ -120603,11 +121040,6 @@ global.THREELine2d.normalize = require('normalize-path-scale');
 global.THREELine2d.arc = require('arc-to');
 global.THREELine2d.curve = require('adaptive-bezier-curve');
 
-global.MouseEventHandler =
-    require("../ThreeHelpers.MouseEventHandler.js")(THREE);
-global.ThreeHelpers =
-    require("../ThreeHelpers.SvgPathsGroup.js")(THREE);
-
 require('codemirror/mode/xml/xml');
 require('codemirror/mode/javascript/javascript');
 require('codemirror/mode/css/css');
@@ -120620,8 +121052,16 @@ global.THREE.OrbitControls = require('three-orbit-controls')(THREE);
 global.Stats = require("stats-js");
 global.numeric = require("numeric");
 
+global.MouseEventHandler =
+    require("../ThreeHelpers.MouseEventHandler.js")(THREE);
+global.ThreeHelpers =
+    require("../ThreeHelpers.SvgPathsGroup.js")(THREE);
+global.ZmqPlugin = require("../zmq-plugin.js");
+global.ControlPointsUI = require("../d3.controlPoints.js");
+global.PlaneTransform = require("../planeTransform.js")(THREE);
+
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../":4,"../ThreeHelpers.MouseEventHandler.js":1,"../ThreeHelpers.SvgPathsGroup.js":2,"../shaders/basic":111,"./shader-dash":113,"./shader-gradient":114,"adaptive-bezier-curve":6,"arc-to":8,"codemirror/lib/codemirror":17,"codemirror/mode/css/css":18,"codemirror/mode/htmlmixed/htmlmixed":19,"codemirror/mode/javascript/javascript":20,"codemirror/mode/xml/xml":21,"d3":25,"exdat":64,"jquery-slim":75,"lodash":82,"lodash/fp":78,"normalize-path-scale":85,"numeric":86,"socket.io-client":93,"stats-js":103,"three":105,"three-orbit-controls":104,"two":3}],113:[function(require,module,exports){
+},{"../":5,"../ThreeHelpers.MouseEventHandler.js":1,"../ThreeHelpers.SvgPathsGroup.js":2,"../d3.controlPoints.js":4,"../planeTransform.js":112,"../shaders/basic":113,"../zmq-plugin.js":117,"./shader-dash":115,"./shader-gradient":116,"adaptive-bezier-curve":7,"arc-to":9,"codemirror/lib/codemirror":18,"codemirror/mode/css/css":19,"codemirror/mode/htmlmixed/htmlmixed":20,"codemirror/mode/javascript/javascript":21,"codemirror/mode/xml/xml":22,"d3":26,"exdat":65,"jquery-slim":76,"lodash":83,"lodash/fp":79,"normalize-path-scale":86,"numeric":87,"socket.io-client":94,"stats-js":104,"three":106,"three-orbit-controls":105,"two":3}],115:[function(require,module,exports){
 var number = require('as-number');
 var assign = require('object-assign');
 
@@ -120688,7 +121128,7 @@ module.exports = function (THREE) {
   };
 };
 
-},{"as-number":10,"object-assign":87}],114:[function(require,module,exports){
+},{"as-number":11,"object-assign":88}],116:[function(require,module,exports){
 var assign = require('object-assign');
 var number = require('as-number');
 
@@ -120755,4 +121195,22 @@ module.exports = function (THREE) {
   };
 };
 
-},{"as-number":10,"object-assign":87}]},{},[112]);
+},{"as-number":11,"object-assign":88}],117:[function(require,module,exports){
+module.exports = {
+    decode_content_data: (msg) => {
+        var mime_type = msg.content.metadata.mime_type;
+        var data = atob(msg.content.data);
+        var response;
+
+        if ((mime_type == 'application/octet-stream') ||
+            (mime_type == 'text/plain')) {
+            return data;
+        } else if (mime_type == 'application/json') {
+            return JSON.parse(data);
+        } else {
+            throw "Unsupported mime_type: " + mime_type;
+        }
+    }
+}
+
+},{}]},{},[114]);
