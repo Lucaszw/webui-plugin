@@ -202,7 +202,8 @@ ThreeHelpers.shapesById = function(df_i) {
      */
     return _fp.mapValues(_fp.flow(_fp.sortBy("vertex_i"),
                                   ThreeHelpers
-                                  .verticesToShape))(df_i.groupBy("id"));
+                                  .verticesToShape))(df_i
+                                                     .groupRecordsBy("id"));
 }
 
 
@@ -239,3 +240,47 @@ var shapeGroup = function (shape, lineOptions, fillOptions) {
     group.add(outline);
     return group;
 }
+
+/******************************************************************************
+ * Functions for drawing circles at shape centers
+ *****************************************************************************/
+var COLORS = {'light blue': new THREE.Color(136/255., 189/255., 230/255.),
+              'light green': new THREE.Color(144/255., 205/255., 151/255.),
+              'red': new THREE.Color(1, 0, 0),
+              'green': new THREE.Color(0, 1, 0),
+              'blue': new THREE.Color(0, 0, 1),
+              'medium green': new THREE.Color(96/255., 189/255., 104/255.)}
+
+
+function getMedian(args) {
+  // See here: https://gist.github.com/caseyjustus/1166258
+  if (!args.length) {return 0};
+  var numbers = args.slice(0).sort((a,b) => a - b);
+  var middle = Math.floor(numbers.length / 2);
+  var isEven = numbers.length % 2 === 0;
+  return isEven ? (numbers[middle] + numbers[middle - 1]) / 2 : numbers[middle];
+}
+
+
+var f_circle_at = (position, radius, material, geometry) => {
+    var radius = radius || 1;
+    var geometry = geometry || new THREE.CircleGeometry(radius, 64);
+    var material = material || new THREE.MeshBasicMaterial({transparent: true,
+                                                            opacity: 0});
+    console.log({radius: radius, geometry: geometry, material: material});
+    var result = new THREE.Mesh(geometry, material);
+    _.assign(result.position, position);
+    return result;
+}
+
+
+var f_circles = (radius, material, geometry) =>
+    _fp.mapValues(_.partialRight(f_circle_at, radius, material, geometry));
+
+
+var f_sizes = _fp.pipe(_fp.map(_fp.at(["width", "height"])), _fp.unzip,
+                       _fp.zipObject(["width", "height"]));
+
+var f_set_attr_properties = (objs, attr, properties) =>
+    _fp.forEach(_fp.pipe(_fp.get(attr),
+                _.partialRight(_.assign, properties)))(objs);

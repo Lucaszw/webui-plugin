@@ -137,8 +137,24 @@ class DataFrame {
     return data_frame_to_js(this);
   }
 
+  get(column) {
+    if (_.isArray(column)) {
+      // Multiple columns were specified.
+      var columns = column;
+      // Get array of values for each column.
+      var values_i = _.unzip(_fp.map(_fp.at(columns))(this._df));
+      // Return a mapping from each column key to an ``Array`` of values for
+      // the column.
+      return _.zipObject(columns, values_i);
+    } else {
+      // A single column was specified.
+      // Return an ``Array`` of values for the column.
+      return _fp.map(_fp.get(column))(this._df);
+    }
+  }
+
   pick(columns) {
-    if (!_.isArray(columns)) { columns = [columns]; }
+    columns = _.castArray(columns);
     var df_i = _.clone(this);
     df_i.columns = columns;
     df_i.values = _fp.map(_fp.at(columns))(_fp.at(df_i.index)(df_i._df));
@@ -146,9 +162,7 @@ class DataFrame {
   }
 
   ix(index_values) {
-    if (!_.isArray(index_values)) {
-        index_values = [index_values];
-    }
+    index_values = _.castArray(index_values);
     var df_i = _.clone(this);
     df_i.index = index_values;
     df_i.values = _fp.map(_fp.at(df_i.columns))(_fp.at(df_i.index)(df_i._df));
@@ -156,7 +170,7 @@ class DataFrame {
   }
 
   iloc(positions) {
-    if (!_.isArray(positions)) { positions = [positions]; }
+    positions = _.castArray(positions);
     var df_i = _.clone(this);
     df_i.index = _fp.map(function (i) { return _.nth(df_i.index, i); })(positions);
     if (!(_.every(_fp.map(_.negate(_.isUndefined))(df_i.index)))) {
@@ -345,11 +359,67 @@ class DataFrame {
     return new DataFrame(df_i);
   }
 
-  groupBy(columns=null) {
+  groupRecordsBy(columns=null) {
+    /*
+     * Parameters
+     * ----------
+     * columns, optional : string or Array
+     *     Column(s) to group rows by.
+     *
+     * Returns
+     * -------
+     * Object
+     *     Mapping from each **group key** to an **``Array`` of records** only
+     *     containing rows where ``columns`` match corresponding group value.
+     *
+     * See also
+     * --------
+     * `meth:groupBy`
+     */
     columns = columns || this.columns;
     var groups_i = _fp.groupBy(_fp.at(_.at(this.columnPositions,
                                            columns)))(this.values);
     return _fp.mapValues(_fp.map(_fp.zipObject(this.columns)))(groups_i);
+  }
+
+  groupBy(columns=null) {
+    /*
+     * Parameters
+     * ----------
+     * columns, optional : string or Array
+     *     Column(s) to group rows by.
+     *
+     * Returns
+     * -------
+     * Object
+     *     Mapping from each **group key** to a **``DataFrame``** only
+     *     containing rows where ``columns`` match corresponding group value.
+     *
+     * See also
+     * --------
+     * `meth:groupRecordsBy`
+     */
+    // Append index value to each row.
+    var valueColumns = _.unzip(this.values);
+    var columns_i = _.concat([this.index.slice()], valueColumns);
+    var rows_i = _.unzip(columns_i);
+
+    columns = columns || this.columns;
+    // Modify column positions to account for index column.
+    var columnPositions_i = _.mapValues(this.columnPositions, _fp.add(1));
+    var selectedPositions_i = _fp.at(columns)(columnPositions_i);
+
+    // Sort rows (including index values) according to specified columns.
+    var groups_i = _.groupBy(rows_i, _fp.at(selectedPositions_i));
+
+    return _.mapValues(groups_i, (v, k) => {
+        // Return new data frame with new row/index order.
+        var df_i = _.clone(this);
+        columns_i = _.unzip(v);
+        df_i.index = columns_i[0];
+        df_i.values = _.unzip(columns_i.slice(1, columns_i.length));
+        return new DataFrame(df_i);
+    });
   }
 }
 

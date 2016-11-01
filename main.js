@@ -181,6 +181,28 @@ class DeviceUIPlugin {
         this.device_view = deviceView;
         this.socket = null;
         this.device = null;
+        this.routes = null;
+    }
+
+    setRoutes(df_routes) {
+        this.routes = df_routes;
+        if (this.device_view.circles_group) {
+            this.device_view.resetCircleStyles();
+            this.device_view.styleRoutes(this.routes.groupBy("route_i"));
+        }
+    }
+
+    setDevice(device) {
+        this.device = device;
+        var shapes = dataFrameToShapes(this.device
+                                        .df_shapes);
+        styleShapes(shapes);
+        this.device_view.setShapes(shapes);
+
+        var min_median_extent = _.min(_.values(device.median_size));
+        var radius = .5 * .5 * min_median_extent;
+        this.device_view.setCircles(f_circles(radius)(this.device_view
+                                                      .shapeCenters));
     }
 
     listen(zmq_uri) {
@@ -221,12 +243,7 @@ class DeviceUIPlugin {
                         if (data) {
                             // Refresh local device configuration.
                             console.log("on_device_loaded", data);
-                            // **TODO** Use `Device` class
-                            this.device = new Device(data);
-                            var shapes = dataFrameToShapes(this.device
-                                                           .df_shapes);
-                            styleShapes(shapes);
-                            this.device_view.setShapes(shapes);
+                            this.setDevice(new Device(data));
                         }
                     }
                 } else if ((source ==
@@ -252,11 +269,15 @@ class DeviceUIPlugin {
                 } else if ((source == 'wheelerlab.droplet_planning_plugin')
                         && (msg_type == 'execute_reply')) {
                     if (msg['content']['command'] == 'add_route') {
-                        console.log("TODO",
-                                    "execute_async('wheelerlab.droplet_planning_plugin'",
-                                    "get_routes");
+                        this.socket.emit("execute",
+                                         {"args":
+                                          ["wheelerlab" +
+                                           ".droplet_planning_plugin",
+                                           "get_routes"], "kwargs": {}});
                     } else if (msg['content']['command'] == 'get_routes') {
                         data = ZmqPlugin.decode_content_data(msg);
+                        var df_routes = new DataFrame(data);
+                        this.setRoutes(df_routes);
                         console.log("on_routes_set", data);
                     }
                 } else {
@@ -282,17 +303,46 @@ class Device {
         var setY = _.curry(_.set)(_, y_column);
         var max_y = _.max(_fp.map(getY)(this.df_shapes.values));
         var flipY = _fp.map((row) => setY(_.clone(row),
-                                            max_y - getY(row)));
+                                          max_y - getY(row)));
         this.df_shapes.values = flipY(this.df_shapes.values);
 
         this.electrode_ids_by_channel = _.map(this.df_electrode_channels
-                                              .groupBy("channel"),
+                                              .groupRecordsBy("channel"),
                                               _fp.map(_fp
                                                       .get("electrode_id")));
-        this.channels_by_electrode_id = _.mapValues(this.df_electrode_channels
-                                                    .groupBy("electrode_id"),
-                                                    _fp.map(_fp
-                                                            .get("channel")));
+        this.channels_by_electrode_id =
+            _.mapValues(this.df_electrode_channels
+                        .groupRecordsBy("electrode_id"),
+                        _fp.map(_fp.get("channel")));
+
+        function boundingBox(xy_arrays) {
+          function bounds(data) {
+            var funcs = ["min", "max", "mean"];
+            var result = _.zipObject(funcs, _.map(funcs, (f_ij) =>
+                                                  _[f_ij](data)));
+            result["length"] = result["max"] - result["min"];
+            return result;
+          }
+          var f_xy_bounds = _fp.pipe(_fp.mapValues(bounds), _fp.at(["x", "y"]),
+                                     _fp.zipObject(["x", "y"]));
+          var xy_bounds = f_xy_bounds(xy_arrays);
+          return {"x": xy_bounds.x.min, "x_center": xy_bounds.x.mean,
+                  "width": xy_bounds.x.length,
+                  "y": xy_bounds.y.min, "y_center": xy_bounds.y.mean,
+                  "height": xy_bounds.y.length};
+        }
+
+        // Compute bounding box (including center) of each electrode shape.
+        this.electrode_bounds = _.mapValues(this.df_shapes.groupBy("id"),
+                                            (df_i) =>
+                                            boundingBox(df_i.get(["x", "y"])));
+
+        /*
+         * Set radius of circles based on minimum of median x/median y
+         * electrode size.
+         */
+        this.median_size = _.mapValues(f_sizes(this.electrode_bounds),
+                                       getMedian);
     }
 }
 
@@ -342,6 +392,43 @@ class DeviceView {
             // Unbind any attached mouse event handlers.
             this.mouseHandler.unbind();
         }
+    }
+
+    setCircles(circles) {
+        this.circles = circles;
+
+        this.circles_group = new THREE.Group();
+        _.forEach(circles, (v) => this.circles_group.add(v));
+        this.circles_group.position.z =
+            1.1 * this.shapes.parentGroup.position.z;
+        this.threePlane.scene.add(this.circles_group);
+    }
+
+    resetCircles() {
+        if (this.circles_group) {
+            this.threePlane.scene.remove(this.circles_group);
+            this.circles_group = null;
+            this.circles = null;
+        }
+    }
+
+    resetCircleStyles() {
+        f_set_attr_properties(this.circles_group.children, "material",
+                              {opacity: 0, color: COLORS["light blue"]});
+        f_set_attr_properties(this.circles_group.children, "scale",
+                              {x: 1, y: 1, z: 1});
+    }
+
+    styleRoutes(routes) {
+        _fp.forEach((df_i) =>
+            _.forEach(_.at(this.circles, df_i.get("electrode_i")),
+                    (mesh_i, i) => {
+                        var s = i / df_i.size;
+                        mesh_i.material.color = COLORS["green"];
+                        mesh_i.material.opacity = 0.4 + .6 * s;
+                        mesh_i.scale.x = .5 + .5 * s;
+                        mesh_i.scale.y = .5 + .5 * s;
+                    }))(routes);
     }
 
     setShapes(shapes) {
