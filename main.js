@@ -269,9 +269,11 @@ class DeviceUIPlugin {
                 } else if ((source == 'wheelerlab.droplet_planning_plugin')
                         && (msg_type == 'execute_reply')) {
                     if (msg['content']['command'] == 'add_route') {
-                        console.log("TODO",
-                                    "execute_async('wheelerlab.droplet_planning_plugin'",
-                                    "get_routes");
+                        this.socket.emit("execute",
+                                         {"args":
+                                          ["wheelerlab" +
+                                           ".droplet_planning_plugin",
+                                           "get_routes"], "kwargs": {}});
                     } else if (msg['content']['command'] == 'get_routes') {
                         data = ZmqPlugin.decode_content_data(msg);
                         var df_routes = new DataFrame(data);
