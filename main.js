@@ -170,10 +170,52 @@ class EventHandler {
     constructor(deviceView) {
         _.extend(this, Backbone.Events);
         this.device_view = deviceView;
+        this.electrode_queue = [];
+        this.queuing_active = false;
     }
 
     listen() {
       this.device_view.on("shapes-set", (shapes) => {
+        /*
+         * Draw routes using mouse to explicitly drag along a path.
+         *
+         *  * On electrode button press:
+         *      - Create new queue containing electrode.
+         *  * On electrode `mouseover`:
+         *      - Add electrode to queue.
+         *      - Trigger "electrode_queue_updated".
+         *  * On button released over electrode:
+         *      - If queue contains a single electrode, toggle electrode state
+         *        by triggering "set_electrode_state".
+         *      - If queue contains multiple electrodes, trigger
+         *        "electrode_queue_finished".
+         */
+        this.device_view.mouseHandler.on("mousedown",
+          (x, y, intersections, event) => {
+            var intersection = intersections[0];
+            var mesh = intersection.object;
+            var scenePoint = intersection.point;
+            var electrode_id = mesh.shape_id;
+
+            if (event.button == 0) {
+              this.electrode_queue = [electrode_id];
+              this.trigger("electrode_queue_started", this.electrode_queue);
+              this.queuing_active = true;
+            }
+          });
+        this.device_view.mouseHandler.on("mouseover",
+          (x, y, intersection, event) => {
+            var mesh = intersection.object;
+            var scenePoint = intersection.point;
+            var data = {"world_position": scenePoint,
+                        "electrode_id": mesh.shape_id,
+                        "event": event};
+            if (this.queuing_active) {
+              this.electrode_queue.push(data.electrode_id);
+              this.trigger("electrode_queue_updated", this.electrode_queue);
+            }
+            this.trigger("mouseover", data);
+          });
         this.device_view.mouseHandler.on("mouseout",
           (x, y, intersection, event) => {
             var mesh = intersection.object;
@@ -183,38 +225,28 @@ class EventHandler {
                         "event": event};
             this.trigger("mouseout", data);
           });
-        this.device_view.mouseHandler.on("mouseover",
-          (x, y, intersection, event) => {
-            var mesh = intersection.object;
-            var scenePoint = intersection.point;
-            var data = {"world_position": scenePoint,
-                        "electrode_id": mesh.shape_id,
-                        "event": event};
-            this.trigger("mouseover", data);
-          });
-        this.device_view.mouseHandler.on("mousedown",
-          (x, y, intersections, event) => {
-            var intersection = intersections[0];
-            var mesh = intersection.object;
-            var scenePoint = intersection.point;
-            console.log("mousedown", x, y, mesh.shape_id, event);
-          });
         this.device_view.mouseHandler.on("mouseup",
           (x, y, intersections, event) => {
             var intersection = intersections[0];
             var mesh = intersection.object;
             var scenePoint = intersection.point;
-            console.log("mouseup", x, y, mesh.shape_id, event);
+            if (this.queuing_active && (event.button == 0)) {
+                if (this.electrode_queue.length == 1) {
+                    this.trigger("set_electrode_state",
+                                 {"electrode_id": mesh.shape_id,
+                                  "state": !(mesh.material.opacity > .5)});
+                } else if (this.electrode_queue.length > 1) {
+                  this.trigger("electrode_queue_finished",
+                               this.electrode_queue);
+                }
+            }
+            this.queuing_active = false;
           });
         this.device_view.mouseHandler.on(
           "clicked", (x, y, intersects) => {
             var intersection = intersects[0];
             var mesh = intersection.object;
             var scenePoint = intersection.point;
-
-            this.trigger("set_electrode_state",
-                         {"electrode_id": mesh.shape_id,
-                          "state": !(mesh.material.opacity > .5)});
         });
       });
     }
@@ -287,6 +319,14 @@ class DeviceUIPlugin {
                ["wheelerlab.electrode_controller_plugin",
                 "set_electrode_state"],
                "kwargs": kwargs};
+            this.socket.emit("execute", request);
+        });
+        this.event_handler.on("electrode_queue_finished", (electrode_ids) => {
+            // Send request to toggle state of clicked electrodes.
+            var request =
+              {"args":
+               ["wheelerlab.droplet_planning_plugin", "add_route"],
+               "kwargs": {"drop_route": electrode_ids}};
             this.socket.emit("execute", request);
         });
         this.event_handler.on("mouseover", (data) => {
