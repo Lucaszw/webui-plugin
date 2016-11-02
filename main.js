@@ -174,18 +174,24 @@ class EventHandler {
 
     listen() {
       this.device_view.on("shapes-set", (shapes) => {
-        //this.device_view.mouseHandler.on("mouseout",
-          //(x, y, intersection, event) => {
-            //var mesh = intersection.object;
-            //var scenePoint = intersection.point;
-            //console.log("mouseout", x, y, mesh.shape_id, event);
-          //});
-        //this.device_view.mouseHandler.on("mouseover",
-          //(x, y, intersection, event) => {
-            //var mesh = intersection.object;
-            //var scenePoint = intersection.point;
-            //console.log("mouseover", x, y, mesh.shape_id, event);
-          //});
+        this.device_view.mouseHandler.on("mouseout",
+          (x, y, intersection, event) => {
+            var mesh = intersection.object;
+            var scenePoint = intersection.point;
+            var data = {"world_position": scenePoint,
+                        "electrode_id": mesh.shape_id,
+                        "event": event};
+            this.trigger("mouseout", data);
+          });
+        this.device_view.mouseHandler.on("mouseover",
+          (x, y, intersection, event) => {
+            var mesh = intersection.object;
+            var scenePoint = intersection.point;
+            var data = {"world_position": scenePoint,
+                        "electrode_id": mesh.shape_id,
+                        "event": event};
+            this.trigger("mouseover", data);
+          });
         this.device_view.mouseHandler.on("mousedown",
           (x, y, intersections, event) => {
             var intersection = intersections[0];
