@@ -511,8 +511,9 @@ class DeviceView {
     resetCircleStyles() {
         ThreeHelpers.f_set_attr_properties(this.circles_group.children,
                                            "material",
-                                           {opacity: 0, color: ThreeHelpers
-                                            .COLORS["light blue"]});
+                                           {opacity: 0.8, color: ThreeHelpers
+                                            .COLORS["light blue"],
+                                            visible: false});
         ThreeHelpers.f_set_attr_properties(this.circles_group.children,
                                            "scale", {x: 1, y: 1, z: 1});
     }
@@ -522,6 +523,7 @@ class DeviceView {
             _.forEach(_.at(this.circles, df_i.get("electrode_i")),
                     (mesh_i, i) => {
                         var s = i / df_i.size;
+                        mesh_i.material.visible = true;
                         mesh_i.material.color = ThreeHelpers.COLORS["green"];
                         mesh_i.material.opacity = 0.4 + .6 * s;
                         mesh_i.scale.x = .5 + .5 * s;
