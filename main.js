@@ -302,7 +302,8 @@ class DeviceUIPlugin {
             var data = ZmqPlugin.decode_content_data({"content":
                                                       msg["response"]});
             if (data) {
-                console.log(data);
+              // Log execute_reply target, command, and reply data.
+              _.spread(console.log)(_.concat(msg.request.args, [data]));
             }
         });
 
