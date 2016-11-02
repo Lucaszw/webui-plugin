@@ -259,10 +259,16 @@ class DeviceUIPlugin {
         this.socket = null;
         this.device = null;
         this.routes = null;
+        this.queue_mesh = null;
 
         this.route_material = new THREE.ShaderMaterial(
             THREELine2d.BasicShader({side: THREE.DoubleSide,
-                                     diffuse: 0x5cd7ff,
+                                     diffuse: 0x5da5da,
+                                     thickness: 0.3}));
+        this.queue_material = new THREE.ShaderMaterial(
+            THREELine2d.BasicShader({side: THREE.DoubleSide,
+                                     diffuse: 0x60bd68,
+                                     opacity: 0.2,
                                      thickness: 0.3}));
     }
 
@@ -326,7 +332,21 @@ class DeviceUIPlugin {
                "kwargs": kwargs};
             this.socket.emit("execute", request);
         });
+        this.event_handler.on("electrode_queue_updated", (electrode_ids) => {
+            if (this.queue_mesh) {
+                this.device_view.threePlane.scene.remove(this.queue_mesh);
+            }
+            var queue_geometry =
+                THREELine2d.Line(this.centerCoordinates(electrode_ids),
+                                 {distances: true});
+            this.queue_mesh = new THREE.Mesh(queue_geometry,
+                                             this.queue_material);
+            this.device_view.threePlane.scene.add(this.queue_mesh);
+        });
         this.event_handler.on("electrode_queue_finished", (electrode_ids) => {
+            if (this.queue_mesh) {
+                this.device_view.threePlane.scene.remove(this.queue_mesh);
+            }
             // Send request to toggle state of clicked electrodes.
             var request =
               {"args":
