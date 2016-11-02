@@ -282,9 +282,8 @@ class DeviceUIPlugin {
 
             var f_route_geometries =
                 (centers) => _fp.map((df_i) =>
-                    THREELine2d.Line(_.map(_.at(centers,
-                                           df_i.get("electrode_i")),
-                                           _fp.at(["x", "y"]))));
+                    THREELine2d.Line(this.centerCoordinates
+                                     (df_i.get("electrode_i"))));
             var route_geometries =
                 f_route_geometries(this.device_view.shapeCenters)
                 (this.routes.groupBy("route_i"));
@@ -307,6 +306,12 @@ class DeviceUIPlugin {
         var radius = .5 * .5 * min_median_extent;
         this.device_view.setCircles(ThreeHelpers.f_circles(radius)
                                     (this.device_view.shapeCenters));
+    }
+
+    centerCoordinates(electrode_ids, centers=null) {
+        centers = centers || this.device_view.shapeCenters;
+        return _fp.pipe(_fp.at.convert({"rearg": false})(centers),
+                        _fp.map(_fp.at(["x", "y"])))(electrode_ids);
     }
 
     listen(zmq_uri) {
