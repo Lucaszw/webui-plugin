@@ -60,27 +60,6 @@
                 testingFolder.add(testFuncs, 'load 90 pin');
                 testingFolder.add(testFuncs, 'load gcc');
                 temp(deviceView.menu);
-
-                deviceView.on("shapes-set", function (shapes) {
-                  deviceView.mouseHandler.on(
-                    "clicked", function (x, y, intersects) {
-                      var intersection = intersects[0];
-                      var mesh = intersection.object;
-                      var scenePoint = intersection.point;
-
-                      // Send request to toggle state of clicked electrodes.
-                      var request =
-                        {"args":
-                         ["wheelerlab.electrode_controller_plugin",
-                          "set_electrode_state"],
-                         "kwargs":
-                         {electrode_id: mesh.shape_id,
-                          state: !(mesh.material.opacity > .5)}};
-                      device_ui_plugin.socket.emit("execute", request);
-
-                      console.log(mesh.shape_id, scenePoint);
-                  });
-                });
             });
         </script>
     </body>

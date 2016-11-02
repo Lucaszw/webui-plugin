@@ -166,6 +166,54 @@ function centerVideo(threePlane, bbox) {
 
 var namespace;
 
+class EventHandler {
+    constructor(deviceView) {
+        _.extend(this, Backbone.Events);
+        this.device_view = deviceView;
+    }
+
+    listen() {
+      this.device_view.on("shapes-set", (shapes) => {
+        //this.device_view.mouseHandler.on("mouseout",
+          //(x, y, intersection, event) => {
+            //var mesh = intersection.object;
+            //var scenePoint = intersection.point;
+            //console.log("mouseout", x, y, mesh.shape_id, event);
+          //});
+        //this.device_view.mouseHandler.on("mouseover",
+          //(x, y, intersection, event) => {
+            //var mesh = intersection.object;
+            //var scenePoint = intersection.point;
+            //console.log("mouseover", x, y, mesh.shape_id, event);
+          //});
+        this.device_view.mouseHandler.on("mousedown",
+          (x, y, intersections, event) => {
+            var intersection = intersections[0];
+            var mesh = intersection.object;
+            var scenePoint = intersection.point;
+            console.log("mousedown", x, y, mesh.shape_id, event);
+          });
+        this.device_view.mouseHandler.on("mouseup",
+          (x, y, intersections, event) => {
+            var intersection = intersections[0];
+            var mesh = intersection.object;
+            var scenePoint = intersection.point;
+            console.log("mouseup", x, y, mesh.shape_id, event);
+          });
+        this.device_view.mouseHandler.on(
+          "clicked", (x, y, intersects) => {
+            var intersection = intersects[0];
+            var mesh = intersection.object;
+            var scenePoint = intersection.point;
+
+            this.trigger("set_electrode_state",
+                         {"electrode_id": mesh.shape_id,
+                          "state": !(mesh.material.opacity > .5)});
+        });
+      });
+    }
+}
+
 
 class DeviceUIPlugin {
     constructor(deviceView) {
@@ -224,6 +272,18 @@ class DeviceUIPlugin {
     }
 
     listen(zmq_uri) {
+        this.event_handler = new EventHandler(this.device_view);
+        this.event_handler.listen();
+        this.event_handler.on("set_electrode_state", (kwargs) => {
+            // Send request to toggle state of clicked electrodes.
+            var request =
+              {"args":
+               ["wheelerlab.electrode_controller_plugin",
+                "set_electrode_state"],
+               "kwargs": kwargs};
+            this.socket.emit("execute", request);
+        });
+
         this.socket = io.connect(zmq_uri);
 
         this.refresh_device = () => {
