@@ -289,6 +289,19 @@ class DeviceUIPlugin {
                "kwargs": kwargs};
             this.socket.emit("execute", request);
         });
+        this.event_handler.on("mouseover", (data) => {
+            var circle_mesh = this.device_view.circles[data.electrode_id];
+            if (!circle_mesh.material.visible) {
+              circle_mesh.material.visible = true;
+            }
+        });
+        this.event_handler.on("mouseout", (data) => {
+            var circle_mesh = this.device_view.circles[data.electrode_id];
+            if (circle_mesh.material.color ==
+                ThreeHelpers.COLORS["light blue"]) {
+              circle_mesh.material.visible = false;
+            }
+        });
 
         this.socket = io.connect(zmq_uri);
 
