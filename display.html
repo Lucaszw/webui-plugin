@@ -38,7 +38,6 @@
                 var zmq_port = params.get('zmqport') || "5000";
                 var zmq_url = _.join([zmq_transport, '://', zmq_domain, ':',
                                       zmq_port, namespace], "");
-                console.log("zmq_url", zmq_url, zmq_transport);
                 device_ui_plugin = new DeviceUIPlugin(deviceView);
                 device_ui_plugin.listen(zmq_url);
 

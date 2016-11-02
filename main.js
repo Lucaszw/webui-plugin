@@ -322,7 +322,6 @@ class DeviceUIPlugin {
                         data = ZmqPlugin.decode_content_data(msg);
                         if (data) {
                             // Refresh local device configuration.
-                            console.log("on_device_loaded", data);
                             this.setDevice(new Device(data));
                         }
                     }
@@ -333,7 +332,6 @@ class DeviceUIPlugin {
                         .indexOf(msg['content']['command']) >= 0) {
                         // The state of one or more electrodes has changed.
                         data = ZmqPlugin.decode_content_data(msg);
-                        console.log("on_electrode_states_updated", data);
                         var electrode_states = extractElectrodeStates(data);
                         this.applyElectrodeStates(electrode_states);
                     } else if (msg['content']['command'] ==
@@ -341,7 +339,6 @@ class DeviceUIPlugin {
                         // A plugin has requested the state of all
                         // channels/electrodes.
                         data = ZmqPlugin.decode_content_data(msg);
-                        console.log("on_electrode_states_set", data);
                         var electrode_states = extractElectrodeStates(data);
                         this.applyElectrodeStates(electrode_states);
                     } else {
@@ -360,11 +357,9 @@ class DeviceUIPlugin {
                         data = ZmqPlugin.decode_content_data(msg);
                         var df_routes = new DataFrame(data);
                         this.setRoutes(df_routes);
-                        console.log("on_routes_set", data);
                     }
                 } else {
                     this.socket.most_recent = msg;
-                    console.log("zmq subscribe message:", msg);
                 }
             } catch (e) {
                 console.error('Error processing message from subscription socket.', e);
