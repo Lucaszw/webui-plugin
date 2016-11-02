@@ -607,7 +607,7 @@ class DeviceView {
         _fp.forEach((df_i) =>
             _.forEach(_.at(this.circles, df_i.get("electrode_i")),
                     (mesh_i, i) => {
-                        var s = i / df_i.size;
+                        var s = (i == df_i.size - 1) ? 1 : 0;
                         mesh_i.material.visible = true;
                         mesh_i.material.color = ThreeHelpers.COLORS["green"];
                         mesh_i.material.opacity = 0.4 + .6 * s;
