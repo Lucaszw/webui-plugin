@@ -511,21 +511,28 @@ class Device {
 
 
 class DeviceView {
-    constructor(canvasElement, controlHandlesElement) {
+    //constructor(canvasElement, controlHandlesElement, scene, camera, menu) {
+    constructor(three_widget, menu) {
         // Create and display stats widget (displays frames per second).
         this.stats = initStats();
         // Create `three.js` scene and plane with video from webcam.
-        this.threePlane = new PlaneTransform(canvasElement,
-                                             controlHandlesElement);
+        this.threePlane = new PlaneTransform(three_widget.canvas,
+                                             three_widget
+                                             .control_handles_element,
+                                             three_widget.scene,
+                                             three_widget.camera,
+                                             three_widget.renderer);
 
         // Create orbit controls to zoom, pan, etc.  Start at center of SVG
         // drawing.
         this.orbit = new OrbitControls(this.threePlane.camera,
-                                       this.threePlane.renderer.domElement);
+                                       three_widget.renderer.domElement);
         this.orbit.reset();
         this.orbit.enableRotate = false;
+        this.three_widget = three_widget;
+        this.three_widget.on("onResize", () => this.orbit.reset())
 
-        this.menu = new dat.GUI({autoPlace: false});
+        this.menu = menu;
         var transformFolder = this.menu.addFolder("Transforms");
         transformFolder.add(this.threePlane, 'rotateRight');
         transformFolder.add(this.threePlane, 'rotateLeft');

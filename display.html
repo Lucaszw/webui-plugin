@@ -4,23 +4,24 @@
     <head>
         <meta http-equiv="content-type" content="text/html; charset=UTF-8">
         <link rel="stylesheet" type="text/css" media="screen" href="formatPlane.css" />
+        <link rel="stylesheet" type="text/css" media="screen" href="index.css" />
+        <script type="text/javascript" src="two.min.js"></script>
         <script type="text/javascript" src="libDeviceUIPlugin.js"></script>
         <script type="text/javascript" src="main.js"></script>
 
         <!--Include PhosphorJS bundle-->
-        <script type="text/javascript" src="bundle.js"></script>
+        <!--<script type="text/javascript" src="bundle.js"></script>-->
     </head>
 
     <body>
         <div id="container">
             <div id="Stats-output"></div>
-            <canvas id="canvasID"></canvas>
             <svg id="controlHandles"></svg>
-        </div>
-        <div id="device" style="display:none">
         </div>
 
         <script type='text/javascript'>
+            $(window).on("load", function () {
+/*
             var device_ui_plugin;
             $(window).on("load", function () {
                 // Create three.js scene, stats widget, and video (webcam) plane.
@@ -58,8 +59,60 @@
                                  () => deviceView.loadSvg('device-gcc.svg')};
                 testingFolder.add(testFuncs, 'load 90 pin');
                 testingFolder.add(testFuncs, 'load gcc');
-                temp(deviceView.menu);
+                // temp(deviceView.menu);
             });
+*/
+            var widgets = {three: new Widgets.ThreeRendererWidget(),
+                           dat: new Widgets.DatGuiWidget({autoPlace: false})};
+
+            widgets.three.title.text = "Device view";
+            widgets.dat.title.text = "Options";
+
+            var panel = new DockPanel();
+            panel.id = 'main';
+
+            panel.insertLeft(widgets.three);
+            panel.insertBottom(widgets.dat, widgets.three);
+
+            panel.attach(document.body);
+
+            // Create three.js scene, stats widget, and video (webcam) plane.
+            var deviceView = new DeviceView(widgets.three, widgets.dat.gui);
+            /*
+            var deviceView = new DeviceView(widgets.three.canvas,
+                                            widgets.three
+                                            .control_handles_element,
+                                            widgets.dat.gui);
+                                            */
+
+            // Change to an empty string to use the global namespace.
+            namespace = '/zmq_plugin';
+            // Listen for messages from 0MQ through socket.io proxy.
+            // e.g., when a new Microdrop device is loaded, draw device
+            // layout over video.
+            var params = new URLSearchParams(location.search.slice(1));
+            var zmq_transport = params.get('zmqtransport') || 'http';
+            var zmq_domain = params.get('zmqdomain') || document.domain;
+            var zmq_port = params.get('zmqport') || "5000";
+            var zmq_url = _.join([zmq_transport, '://', zmq_domain, ':',
+                                    zmq_port, namespace], "");
+            device_ui_plugin = new DeviceUIPlugin(deviceView);
+            device_ui_plugin.listen(zmq_url);
+
+            // Start rendering ([rate determined by browser][1]).
+            //
+            // [1]: https://developer.mozilla.org/en-US/docs/Web/API/window/requestAnimationFrame
+            function render() {
+                deviceView.update();
+                requestAnimationFrame(render);
+            }
+            render();
+
+            window.onresize = () => { panel.update(); };
+
+            window.panel = panel;
+            window.widgets = widgets;
+        });
         </script>
     </body>
 </html>
