@@ -243,10 +243,44 @@ class EventHandler {
             this.queuing_active = false;
           });
         this.device_view.mouseHandler.on(
-          "clicked", (x, y, intersects) => {
-            var intersection = intersects[0];
-            var mesh = intersection.object;
-            var scenePoint = intersection.point;
+          "contextmenu", (x, y, intersections, event) => {
+            const intersection = intersections[0];
+            const mesh = intersection.object;
+            const scenePoint = intersection.point;
+            const electrode_id = mesh.shape_id;
+
+            const Menu = PhosphorMenus.Menu;
+            const MenuItem = PhosphorMenus.MenuItem;
+
+            var logHandler = (item) => console.log(item.text)
+            var contextMenu = new Menu([
+                new MenuItem({
+                  text: '&Modify electrode channels...',
+                  icon: 'fa fa-copy',
+                  handler: logHandler
+                }),
+                new MenuItem({
+                  text: '&Clear electrode routes',
+                  handler: () => this.trigger('clear-routes', electrode_id)
+                }),
+                new MenuItem({
+                  text: 'Clear &all electrode routes',
+                  handler: () => this.trigger('clear-routes')
+                }),
+                new MenuItem({
+                  text: 'E&xecute electrode routes',
+                  handler: () => this.trigger('execute-routes', electrode_id)
+                }),
+                new MenuItem({
+                  text: 'Execute a&ll electrode routes',
+                  handler: () => this.trigger('execute-routes')
+                })
+              ]);
+
+            event.preventDefault();
+            var x = event.clientX;
+            var y = event.clientY;
+            contextMenu.popup(x, y);
         });
       });
     }
@@ -331,6 +365,25 @@ class DeviceUIPlugin {
         this.event_handler.listen();
         Key("escape", {el: this.device_view.three_widget.canvas},
             () => this.event_handler.abortQueuing());
+        this.event_handler.on("execute-routes", (electrode_id) => {
+            /* Send request to execute routes for the specified electrode (or
+             * all routes if `electrode_id` is `null`) */
+            var request =
+              {"args": ["wheelerlab.droplet_planning_plugin", "execute_routes"],
+               "kwargs": {electrode_id: electrode_id}};
+            this.socket.emit("execute", request);
+        });
+        this.event_handler.on("clear-routes", (electrode_id) => {
+            /* Send request to clear routes for the specified electrode (or all
+             * routes if `electrode_id` is `null`) */
+            const target = "wheelerlab.droplet_planning_plugin";
+            this.socket.emit("execute", {args: [target, "clear_routes"],
+                                         kwargs: {electrode_id:
+                                                  electrode_id}});
+            // Send request to get updated set of routes to refresh UI.
+            this.socket.emit("execute", {args: [target, "get_routes"],
+                                         kwargs: {}});
+        });
         this.event_handler.on("set_electrode_state", (kwargs) => {
             // Send request to toggle state of clicked electrodes.
             var request =
@@ -541,7 +594,7 @@ class DeviceView {
 
         // Create orbit controls to zoom, pan, etc.  Start at center of SVG
         // drawing.
-        this.orbit = new OrbitControls(this.threePlane.camera,
+        this.orbit = new OrbitControls(three_widget.camera,
                                        three_widget.renderer.domElement);
         this.orbit.reset();
         this.orbit.enableRotate = false;
