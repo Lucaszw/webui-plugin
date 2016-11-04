@@ -250,6 +250,12 @@ class EventHandler {
         });
       });
     }
+
+    abortQueuing() {
+        this.queuing_active = false;
+        this.electrode_queue = [];
+        this.trigger("electrode_queue_updated", this.electrode_queue);
+    }
 }
 
 
@@ -323,6 +329,8 @@ class DeviceUIPlugin {
     listen(zmq_uri) {
         this.event_handler = new EventHandler(this.device_view);
         this.event_handler.listen();
+        Key("escape", {el: this.device_view.three_widget.canvas},
+            () => this.event_handler.abortQueuing());
         this.event_handler.on("set_electrode_state", (kwargs) => {
             // Send request to toggle state of clicked electrodes.
             var request =
@@ -346,6 +354,9 @@ class DeviceUIPlugin {
         this.event_handler.on("electrode_queue_finished", (electrode_ids) => {
             if (this.queue_mesh) {
                 this.device_view.threePlane.scene.remove(this.queue_mesh);
+            }
+            if (!electrode_ids || electrode_ids.length < 0) {
+                return;
             }
             // Send request to toggle state of clicked electrodes.
             var request =
@@ -513,6 +524,11 @@ class Device {
 class DeviceView {
     //constructor(canvasElement, controlHandlesElement, scene, camera, menu) {
     constructor(three_widget, menu) {
+        // Allow canvas to receive focus.
+        $(three_widget.canvas).attr("tabindex", 0);
+        /* Set focus to canvas on click (enables, e.g., use of keyboard
+         * shortcuts). */
+        $(three_widget.canvas).on("mousedown", function () { this.focus(); });
         // Create and display stats widget (displays frames per second).
         this.stats = initStats();
         // Create `three.js` scene and plane with video from webcam.
