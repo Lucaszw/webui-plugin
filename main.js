@@ -166,6 +166,92 @@ function centerVideo(threePlane, bbox) {
 
 var namespace;
 
+class EventHandler {
+    constructor(deviceView) {
+        _.extend(this, Backbone.Events);
+        this.device_view = deviceView;
+        this.electrode_queue = [];
+        this.queuing_active = false;
+    }
+
+    listen() {
+      this.device_view.on("shapes-set", (shapes) => {
+        /*
+         * Draw routes using mouse to explicitly drag along a path.
+         *
+         *  * On electrode button press:
+         *      - Create new queue containing electrode.
+         *  * On electrode `mouseover`:
+         *      - Add electrode to queue.
+         *      - Trigger "electrode_queue_updated".
+         *  * On button released over electrode:
+         *      - If queue contains a single electrode, toggle electrode state
+         *        by triggering "set_electrode_state".
+         *      - If queue contains multiple electrodes, trigger
+         *        "electrode_queue_finished".
+         */
+        this.device_view.mouseHandler.on("mousedown",
+          (x, y, intersections, event) => {
+            var intersection = intersections[0];
+            var mesh = intersection.object;
+            var scenePoint = intersection.point;
+            var electrode_id = mesh.shape_id;
+
+            if (event.button == 0) {
+              this.electrode_queue = [electrode_id];
+              this.trigger("electrode_queue_started", this.electrode_queue);
+              this.queuing_active = true;
+            }
+          });
+        this.device_view.mouseHandler.on("mouseover",
+          (x, y, intersection, event) => {
+            var mesh = intersection.object;
+            var scenePoint = intersection.point;
+            var data = {"world_position": scenePoint,
+                        "electrode_id": mesh.shape_id,
+                        "event": event};
+            if (this.queuing_active) {
+              this.electrode_queue.push(data.electrode_id);
+              this.trigger("electrode_queue_updated", this.electrode_queue);
+            }
+            this.trigger("mouseover", data);
+          });
+        this.device_view.mouseHandler.on("mouseout",
+          (x, y, intersection, event) => {
+            var mesh = intersection.object;
+            var scenePoint = intersection.point;
+            var data = {"world_position": scenePoint,
+                        "electrode_id": mesh.shape_id,
+                        "event": event};
+            this.trigger("mouseout", data);
+          });
+        this.device_view.mouseHandler.on("mouseup",
+          (x, y, intersections, event) => {
+            var intersection = intersections[0];
+            var mesh = intersection.object;
+            var scenePoint = intersection.point;
+            if (this.queuing_active && (event.button == 0)) {
+                if (this.electrode_queue.length == 1) {
+                    this.trigger("set_electrode_state",
+                                 {"electrode_id": mesh.shape_id,
+                                  "state": !(mesh.material.opacity > .5)});
+                } else if (this.electrode_queue.length > 1) {
+                  this.trigger("electrode_queue_finished",
+                               this.electrode_queue);
+                }
+            }
+            this.queuing_active = false;
+          });
+        this.device_view.mouseHandler.on(
+          "clicked", (x, y, intersects) => {
+            var intersection = intersects[0];
+            var mesh = intersection.object;
+            var scenePoint = intersection.point;
+        });
+      });
+    }
+}
+
 
 class DeviceUIPlugin {
     constructor(deviceView) {
@@ -173,6 +259,17 @@ class DeviceUIPlugin {
         this.socket = null;
         this.device = null;
         this.routes = null;
+        this.queue_mesh = null;
+
+        this.route_material = new THREE.ShaderMaterial(
+            THREELine2d.BasicShader({side: THREE.DoubleSide,
+                                     diffuse: 0x5da5da,
+                                     thickness: 0.3}));
+        this.queue_material = new THREE.ShaderMaterial(
+            THREELine2d.BasicShader({side: THREE.DoubleSide,
+                                     diffuse: 0x60bd68,
+                                     opacity: 0.2,
+                                     thickness: 0.3}));
     }
 
     applyElectrodeStates(states) {
@@ -188,6 +285,19 @@ class DeviceUIPlugin {
         if (this.device_view.circles_group) {
             this.device_view.resetCircleStyles();
             this.device_view.styleRoutes(this.routes.groupBy("route_i"));
+
+            var f_route_geometries =
+                (centers) => _fp.map((df_i) =>
+                    THREELine2d.Line(this.centerCoordinates
+                                     (df_i.get("electrode_i"))));
+            var route_geometries =
+                f_route_geometries(this.device_view.shapeCenters)
+                (this.routes.groupBy("route_i"));
+            var route_meshes = _.map(route_geometries,
+                                     (geom) =>
+                                     new THREE.Mesh(geom,
+                                                    this.route_material));
+            this.device_view.setRoutes(route_meshes);
         }
     }
 
@@ -204,7 +314,60 @@ class DeviceUIPlugin {
                                     (this.device_view.shapeCenters));
     }
 
+    centerCoordinates(electrode_ids, centers=null) {
+        centers = centers || this.device_view.shapeCenters;
+        return _fp.pipe(_fp.at.convert({"rearg": false})(centers),
+                        _fp.map(_fp.at(["x", "y"])))(electrode_ids);
+    }
+
     listen(zmq_uri) {
+        this.event_handler = new EventHandler(this.device_view);
+        this.event_handler.listen();
+        this.event_handler.on("set_electrode_state", (kwargs) => {
+            // Send request to toggle state of clicked electrodes.
+            var request =
+              {"args":
+               ["wheelerlab.electrode_controller_plugin",
+                "set_electrode_state"],
+               "kwargs": kwargs};
+            this.socket.emit("execute", request);
+        });
+        this.event_handler.on("electrode_queue_updated", (electrode_ids) => {
+            if (this.queue_mesh) {
+                this.device_view.threePlane.scene.remove(this.queue_mesh);
+            }
+            var queue_geometry =
+                THREELine2d.Line(this.centerCoordinates(electrode_ids),
+                                 {distances: true});
+            this.queue_mesh = new THREE.Mesh(queue_geometry,
+                                             this.queue_material);
+            this.device_view.threePlane.scene.add(this.queue_mesh);
+        });
+        this.event_handler.on("electrode_queue_finished", (electrode_ids) => {
+            if (this.queue_mesh) {
+                this.device_view.threePlane.scene.remove(this.queue_mesh);
+            }
+            // Send request to toggle state of clicked electrodes.
+            var request =
+              {"args":
+               ["wheelerlab.droplet_planning_plugin", "add_route"],
+               "kwargs": {"drop_route": electrode_ids}};
+            this.socket.emit("execute", request);
+        });
+        this.event_handler.on("mouseover", (data) => {
+            var circle_mesh = this.device_view.circles[data.electrode_id];
+            if (!circle_mesh.material.visible) {
+              circle_mesh.material.visible = true;
+            }
+        });
+        this.event_handler.on("mouseout", (data) => {
+            var circle_mesh = this.device_view.circles[data.electrode_id];
+            if (circle_mesh.material.color ==
+                ThreeHelpers.COLORS["light blue"]) {
+              circle_mesh.material.visible = false;
+            }
+        });
+
         this.socket = io.connect(zmq_uri);
 
         this.refresh_device = () => {
@@ -223,7 +386,8 @@ class DeviceUIPlugin {
             var data = ZmqPlugin.decode_content_data({"content":
                                                       msg["response"]});
             if (data) {
-                console.log(data);
+              // Log execute_reply target, command, and reply data.
+              _.spread(console.log)(_.concat(msg.request.args, [data]));
             }
         });
 
@@ -243,7 +407,6 @@ class DeviceUIPlugin {
                         data = ZmqPlugin.decode_content_data(msg);
                         if (data) {
                             // Refresh local device configuration.
-                            console.log("on_device_loaded", data);
                             this.setDevice(new Device(data));
                         }
                     }
@@ -254,7 +417,6 @@ class DeviceUIPlugin {
                         .indexOf(msg['content']['command']) >= 0) {
                         // The state of one or more electrodes has changed.
                         data = ZmqPlugin.decode_content_data(msg);
-                        console.log("on_electrode_states_updated", data);
                         var electrode_states = extractElectrodeStates(data);
                         this.applyElectrodeStates(electrode_states);
                     } else if (msg['content']['command'] ==
@@ -262,7 +424,6 @@ class DeviceUIPlugin {
                         // A plugin has requested the state of all
                         // channels/electrodes.
                         data = ZmqPlugin.decode_content_data(msg);
-                        console.log("on_electrode_states_set", data);
                         var electrode_states = extractElectrodeStates(data);
                         this.applyElectrodeStates(electrode_states);
                     } else {
@@ -281,11 +442,9 @@ class DeviceUIPlugin {
                         data = ZmqPlugin.decode_content_data(msg);
                         var df_routes = new DataFrame(data);
                         this.setRoutes(df_routes);
-                        console.log("on_routes_set", data);
                     }
                 } else {
                     this.socket.most_recent = msg;
-                    console.log("zmq subscribe message:", msg);
                 }
             } catch (e) {
                 console.error('Error processing message from subscription socket.', e);
@@ -397,6 +556,25 @@ class DeviceView {
         }
     }
 
+    setRoutes(routes) {
+        this.routes = routes;
+
+        this.resetRoutes();
+        this.routes_group = new THREE.Group();
+        _.forEach(routes, (v) => this.routes_group.add(v));
+        this.routes_group.position.z =
+            1.05 * this.shapes.parentGroup.position.z;
+        this.threePlane.scene.add(this.routes_group);
+    }
+
+    resetRoutes() {
+        if (this.routes_group) {
+            this.threePlane.scene.remove(this.routes_group);
+            this.routes_group = null;
+            this.routes = null;
+        }
+    }
+
     setCircles(circles) {
         this.circles = circles;
 
@@ -418,8 +596,9 @@ class DeviceView {
     resetCircleStyles() {
         ThreeHelpers.f_set_attr_properties(this.circles_group.children,
                                            "material",
-                                           {opacity: 0, color: ThreeHelpers
-                                            .COLORS["light blue"]});
+                                           {opacity: 0.8, color: ThreeHelpers
+                                            .COLORS["light blue"],
+                                            visible: false});
         ThreeHelpers.f_set_attr_properties(this.circles_group.children,
                                            "scale", {x: 1, y: 1, z: 1});
     }
@@ -428,7 +607,8 @@ class DeviceView {
         _fp.forEach((df_i) =>
             _.forEach(_.at(this.circles, df_i.get("electrode_i")),
                     (mesh_i, i) => {
-                        var s = i / df_i.size;
+                        var s = (i == df_i.size - 1) ? 1 : 0;
+                        mesh_i.material.visible = true;
                         mesh_i.material.color = ThreeHelpers.COLORS["green"];
                         mesh_i.material.opacity = 0.4 + .6 * s;
                         mesh_i.scale.x = .5 + .5 * s;
