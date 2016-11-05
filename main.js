@@ -161,6 +161,8 @@ function centerVideo(threePlane, bbox) {
     position[7] = bbox.top;
     position[9] = bbox.right;
     position[10] = bbox.top;
+
+    threePlane.geometry.attributes.position.needsUpdate = true;
 }
 
 
@@ -395,18 +397,18 @@ class DeviceUIPlugin {
         });
         this.event_handler.on("electrode_queue_updated", (electrode_ids) => {
             if (this.queue_mesh) {
-                this.device_view.threePlane.scene.remove(this.queue_mesh);
+                this.device_view.three_widget.scene.remove(this.queue_mesh);
             }
             var queue_geometry =
                 THREELine2d.Line(this.centerCoordinates(electrode_ids),
                                  {distances: true});
             this.queue_mesh = new THREE.Mesh(queue_geometry,
                                              this.queue_material);
-            this.device_view.threePlane.scene.add(this.queue_mesh);
+            this.device_view.three_widget.scene.add(this.queue_mesh);
         });
         this.event_handler.on("electrode_queue_finished", (electrode_ids) => {
             if (this.queue_mesh) {
-                this.device_view.threePlane.scene.remove(this.queue_mesh);
+                this.device_view.three_widget.scene.remove(this.queue_mesh);
             }
             if (!electrode_ids || electrode_ids.length < 0) {
                 return;
@@ -585,10 +587,7 @@ class DeviceView {
         // Create and display stats widget (displays frames per second).
         this.stats = initStats();
         // Create `three.js` scene and plane with video from webcam.
-        this.threePlane = new PlaneTransform(three_widget.canvas,
-                                             three_widget
-                                             .control_handles_element,
-                                             three_widget.scene,
+        this.threePlane = new PlaneTransform(three_widget.scene,
                                              three_widget.camera,
                                              three_widget.renderer);
 
@@ -602,14 +601,15 @@ class DeviceView {
         this.three_widget.on("onResize", () => this.orbit.reset())
 
         this.menu = menu;
-        var transformFolder = this.menu.addFolder("Transforms");
+        var transformFolder = this.menu.addFolder("Video");
+        transformFolder.add(this, "display_anchors");
+        transformFolder.add(this, "resetAnchors");
         transformFolder.add(this.threePlane, 'rotateRight');
         transformFolder.add(this.threePlane, 'rotateLeft');
         transformFolder.add(this.threePlane, 'flipHorizontal');
         transformFolder.add(this.threePlane, 'flipVertical');
 
         this.menu.add(this.orbit, 'enableRotate');
-        this.menu.add(this.threePlane, 'displayHandles');
         this.menu.add(this.orbit, 'reset');
 
         _.extend(this, Backbone.Events);
@@ -623,7 +623,7 @@ class DeviceView {
 
     resetShapes() {
         if (this.shapes) {
-            this.threePlane.scene.remove(this.shapes.parentGroup);
+            this.three_widget.scene.remove(this.shapes.parentGroup);
             this.shapes = null;
         }
         if (this.mouseHandler) {
@@ -640,12 +640,12 @@ class DeviceView {
         _.forEach(routes, (v) => this.routes_group.add(v));
         this.routes_group.position.z =
             1.05 * this.shapes.parentGroup.position.z;
-        this.threePlane.scene.add(this.routes_group);
+        this.three_widget.scene.add(this.routes_group);
     }
 
     resetRoutes() {
         if (this.routes_group) {
-            this.threePlane.scene.remove(this.routes_group);
+            this.three_widget.scene.remove(this.routes_group);
             this.routes_group = null;
             this.routes = null;
         }
@@ -658,12 +658,12 @@ class DeviceView {
         _.forEach(circles, (v) => this.circles_group.add(v));
         this.circles_group.position.z =
             1.1 * this.shapes.parentGroup.position.z;
-        this.threePlane.scene.add(this.circles_group);
+        this.three_widget.scene.add(this.circles_group);
     }
 
     resetCircles() {
         if (this.circles_group) {
-            this.threePlane.scene.remove(this.circles_group);
+            this.three_widget.scene.remove(this.circles_group);
             this.circles_group = null;
             this.circles = null;
         }
@@ -699,14 +699,14 @@ class DeviceView {
         this.shapeCenters = _fp.flow(computeMeshBoundingBoxes,
                                      computeCenters)(shapes.shapeMeshes);
 
-        initShapes(this.threePlane.scene, this.orbit, this.shapes);
+        initShapes(this.three_widget.scene, this.orbit, this.shapes);
         // Move the corners of the video plane to match the bounding box of all
         // the shapes.
         centerVideo(this.threePlane, this.shapes.boundingBox);
 
-        var args = {element: this.threePlane.canvas_element,
+        var args = {element: this.three_widget.canvas,
                     shapes: this.shapes.shapeMeshes,
-                    camera: this.threePlane.camera};
+                    camera: this.three_widget.camera};
         // Create event manager to translate mouse movement and presses
         // high-level shape events.
         this.mouseHandler = new MouseEventHandler(args);
@@ -732,6 +732,158 @@ class DeviceView {
                 this.setShapes(shapes);
                 resolve({shape: shape, svg: svg});
             });
+        });
+    }
+
+    resetAnchors() {
+        if (!this.anchors) return;
+
+        this.threePlane.prev_anchor_array = [];
+        this.anchors.positions = this.anchors.default_positions;
+        this.threePlane.set_anchors(this.anchors.positions);
+        this.threePlane.update_geometry_positions(this.anchors.positions);
+        this.threePlane.updateCorners();
+        this.threePlane.geometry.attributes.position.needsUpdate = true;
+        this.threePlane.set_anchors(this.anchors.positions);
+    }
+
+    destroyVideoAnchors() {
+        if (!this.display_anchors) return;
+
+        console.log("destroyVideoAnchors");
+        // Disable interaction with electrodes while adjusting anchors.
+        this.mouseHandler.enable();
+        this.anchors_handler.disable();
+        this.anchors_handler = null;
+        // Add anchor meshes to device view scene.
+        this.three_widget.scene.remove(this.anchors.group)
+    }
+
+    adjustVideoAnchors() {
+        if (this.display_anchors) return;
+
+        // Disable interaction with electrodes while adjusting anchors.
+        this.mouseHandler.disable();
+
+        var anchors;
+
+        if (!this.anchors) {
+            var bounding_box = this.shapes.boundingBox;
+            // Create new anchors (including THREE.Mesh instance for each
+            // anchor).
+            anchors = new Anchors(bounding_box);
+        } else {
+            anchors = this.anchors;
+        }
+
+        // Position anchor meshes above video and electrodes.
+        anchors.group.position.z = 1.15 * this.shapes.parentGroup.position.z;
+        // Add anchor meshes to device view scene.
+        this.three_widget.scene.add(anchors.group)
+        // Style the anchors (e.g., opacity, color).
+        _fp.map(_.partialRight(_.set, "material.opacity", .8))(anchors.group.children);
+        _fp.map((mesh) => mesh.material.color.setHex("0x00ff00"))(anchors.group.children);
+        // Set name attribute of anchor meshes.
+        _.forEach(anchors.shapes, (mesh, name) => { mesh.name = name; })
+
+        // Register mouse event handler for anchors.
+        this.anchors_handler =
+            anchors.mouseEventHandler(this.three_widget.canvas,
+                                      this.three_widget.camera);
+        // Make anchors more transparent while mouse button is pressed.
+        this.anchors_handler.on("mousedown", (x, y, intersect, event) => {
+            _fp.map(_.partialRight(_.set, "material.opacity", .4))(anchors.group.children);
+        });
+        this.anchors_handler.on("mouseup", (x, y, intersect, event) => {
+            _fp.map(_.partialRight(_.set, "material.opacity", .8))(anchors.group.children);
+        });
+        // Stretch video according to click and drag of any anchor.
+        this.anchors_handler.on("mousemove", (x, y, intersect, event) => {
+            var mesh = intersect.object;
+            if (event.buttons == 1) {
+                mesh.position.x = intersect.point.x;
+                mesh.position.y = intersect.point.y;
+                this.threePlane.set_anchors(anchors
+                                                                    .positions);
+            }
+        });
+
+        /* Move anchor position on video by holding shift while clicking and
+         * dragging the anchor. */
+        $(this.three_widget.canvas).on("keyup", (event) => {
+            if (event.key == "Shift") {
+                anchors.material.color.setHex("0x00ff00");
+                this.threePlane.updatePos = true;
+            }
+        });
+        $(this.three_widget.canvas).on("keydown", (event) => {
+            if (event.key == "Shift") {
+                anchors.material.color.setHex("0xff0000");
+                this.threePlane.updatePos = false;
+            }
+        });
+        this.anchors = anchors;
+        return anchors;
+    }
+
+    get display_anchors() { return !(!this.anchors_handler); }
+    set display_anchors(value) {
+        if (value) { this.adjustVideoAnchors(); }
+        else { this.destroyVideoAnchors(); }
+    }
+}
+
+
+class Anchors {
+    constructor(bounding_box) {
+        this.bounding_box = bounding_box;
+        this.radius = .05 * bounding_box.width;
+        this.geometry = new THREE.CircleGeometry(this.radius, 64);
+        this.material = new THREE.MeshBasicMaterial({transparent: true,
+                                                     opacity: 0.8,
+                                                     color: "red"});
+        var corners = this.default_positions;
+        this.centers = _fp.pipe(_fp.map(_fp.zipObject(["x", "y"])),
+                                        _fp.values)(corners);
+        // Create a circle `THREE.Mesh` for each control point, each circle
+        // centered at the respective position.
+        this.shapes = _fp.map(_.partialRight(ThreeHelpers.f_circle_at,
+                                             this.radius, this.material,
+                                             this.geometry))(this.centers);
+        // Add control point meshes (i.e., circles) to Three.js group.
+        this.group = new THREE.Group();
+        this.group.name = "anchors";
+        _fp.forEach((v) => this.group.add(v))(this.shapes);
+    }
+
+    get default_positions() {
+        // Define center position for control points as the corners of the
+        // bounding box.
+        var bbox = this.bounding_box;
+        return [[bbox.left, bbox.bottom],
+                [bbox.left + bbox.width, bbox.bottom],
+                [bbox.left, bbox.top],
+                [bbox.left + bbox.width, bbox.top]];
+    }
+
+    mouseEventHandler(canvas_element, camera) {
+        var args = {element: canvas_element,
+                    shapes: this.shapes,
+                    camera: camera};
+        // Create event manager to translate mouse movement and presses
+        // high-level shape events.
+        return new MouseEventHandler(args);
+    }
+
+    get positions() {
+        return _fp.map(_fp.pipe(_fp.at(["position.x", "position.y"]),
+                                _fp.zipObject(["x", "y"])))(this.shapes);
+    }
+
+    set positions(positions) {
+        _.forEach(positions, (p, i) => {
+            this.shapes[i].position.x = p[0];
+            this.shapes[i].position.y = p[1];
         });
     }
 }
