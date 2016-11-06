@@ -257,9 +257,12 @@ class EventHandler {
             var logHandler = (item) => console.log(item.text)
             var contextMenu = new Menu([
                 new MenuItem({
-                  text: '&Modify electrode channels...',
-                  icon: 'fa fa-copy',
-                  handler: logHandler
+                  text: 'Clear all electrode &states',
+                  handler: () => this.trigger('clear-electrode-states',
+                                              electrode_id)
+                }),
+                new MenuItem({
+                  type: MenuItem.Separator
                 }),
                 new MenuItem({
                   text: '&Clear electrode routes',
@@ -374,6 +377,15 @@ class DeviceUIPlugin {
               {"args": ["wheelerlab.droplet_planning_plugin", "execute_routes"],
                "kwargs": {electrode_id: electrode_id}};
             this.socket.emit("execute", request);
+        });
+        this.event_handler.on("clear-electrode-states", () => {
+            var electrode_ids = _.keys(this.device.channels_by_electrode_id);
+            var kwargs = {electrode_states: {index: electrode_ids, values: 0,
+                                             index_dtype: "str", dtype: "int",
+                                             type: "Series"}};
+            this.socket.emit("execute",
+                             {args: ['wheelerlab.electrode_controller_plugin',
+                                     'set_electrode_states'], kwargs: kwargs});
         });
         this.event_handler.on("clear-routes", (electrode_id) => {
             /* Send request to clear routes for the specified electrode (or all
