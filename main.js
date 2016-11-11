@@ -173,6 +173,7 @@ class EventHandler {
         _.extend(this, Backbone.Events);
         this.device_view = deviceView;
         this.electrode_queue = [];
+        this.df_commands = null;
         this.queuing_active = false;
     }
 
@@ -244,8 +245,8 @@ class EventHandler {
             }
             this.queuing_active = false;
           });
-        this.device_view.mouseHandler.on(
-          "contextmenu", (x, y, intersections, event) => {
+        this.device_view.mouseHandler.on("contextmenu",
+          (x, y, intersections, event) => {
             const intersection = intersections[0];
             const mesh = intersection.object;
             const scenePoint = intersection.point;
@@ -255,11 +256,32 @@ class EventHandler {
             const MenuItem = PhosphorMenus.MenuItem;
 
             var logHandler = (item) => console.log(item.text)
+
+            var electrode_commands = (this.df_commands.groupBy("namespace")["electrode"].groupBy("plugin_name"));
+
+            var f_electrode_menu_item =
+                (row_i) => new MenuItem({text: row_i.title,
+                                         handler:
+                    () => this.trigger("execute", {args: [row_i.plugin_name,
+                                                          row_i.command_name],
+                                       kwargs: {electrode_id:
+                                                electrode_id}})});
+
+            var electrodeMenu = new Menu(_.map(electrode_commands,
+                                         (v, k) => new MenuItem({text: k, submenu: new PhosphorMenus.Menu(_.map(v.to_records(), f_electrode_menu_item))})));
+
             var contextMenu = new Menu([
                 new MenuItem({
                   text: 'Clear all electrode &states',
                   handler: () => this.trigger('clear-electrode-states',
                                               electrode_id)
+                }),
+                new MenuItem({
+                  type: MenuItem.Separator
+                }),
+                new MenuItem({
+                  text: 'Electrode',
+                  submenu: electrodeMenu
                 }),
                 new MenuItem({
                   type: MenuItem.Separator
@@ -398,6 +420,9 @@ class DeviceUIPlugin {
             this.socket.emit("execute", {args: [target, "get_routes"],
                                          kwargs: {}});
         });
+        this.event_handler.on("execute", (request) => {
+            this.socket.emit("execute", request);
+        });
         this.event_handler.on("set_electrode_state", (kwargs) => {
             // Send request to toggle state of clicked electrodes.
             var request =
@@ -452,6 +477,9 @@ class DeviceUIPlugin {
             this.socket.emit("execute",
                              {"args": ["wheelerlab.device_info_plugin",
                                        "get_device"], "kwargs": {}})
+            this.socket.emit("execute",
+                             {"args": ["wheelerlab.command_plugin",
+                                       "get_commands"], "kwargs": {}})
         }
         this.device_view.menu.add(this, 'refresh_device');
 
@@ -494,6 +522,16 @@ class DeviceUIPlugin {
                             this.setDevice(new Device(data));
                         }
                     }
+                } else if ((source == 'wheelerlab.command_plugin') &&
+                           (msg_type == 'execute_reply')) {
+                    if (['get_commands', 'register_command',
+                        'unregister_command'].indexOf(msg['content']['command'])
+                        >= 0) {
+                        /* Registered commands may have changed, so update
+                         * local command registry. */
+                        data = ZmqPlugin.decode_content_data(msg);
+                        this.event_handler.df_commands = new DataFrame(data);
+                    }
                 } else if ((source ==
                             'wheelerlab.electrode_controller_plugin') &&
                         (msg_type == 'execute_reply')) {
@@ -504,7 +542,7 @@ class DeviceUIPlugin {
                         var electrode_states = extractElectrodeStates(data);
                         this.applyElectrodeStates(electrode_states);
                     } else if (msg['content']['command'] ==
-                            'get_channel_states') {
+                               'get_channel_states') {
                         // A plugin has requested the state of all
                         // channels/electrodes.
                         data = ZmqPlugin.decode_content_data(msg);
