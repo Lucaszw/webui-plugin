@@ -87,6 +87,8 @@ def run_plugin(sio, plugin, log_level=None, namespace=None):
             start = arrow.now()
         except KeyboardInterrupt:
             IPython.embed()
+        except RuntimeError, exception:
+            logger.error('Error', exc_info=True)
 
 
 def parse_args(args=None):
