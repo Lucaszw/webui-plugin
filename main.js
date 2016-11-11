@@ -449,11 +449,17 @@ class DeviceUIPlugin {
 
         this.socket.on('execute_reply', (msg) => {
             console.log("execute_reply", msg);
-            var data = ZmqPlugin.decode_content_data({"content":
-                                                      msg["response"]});
-            if (data) {
-              // Log execute_reply target, command, and reply data.
-              _.spread(console.log)(_.concat(msg.request.args, [data]));
+            try {
+                var data = ZmqPlugin.decode_content_data({"content":
+                                                          msg["response"]});
+                if (data) {
+                    // Log execute_reply target, command, and reply data.
+                    _.spread(console.log)(_.concat(msg.request.args, [data]));
+                }
+            } catch(e) {
+                // Write last line of error to console.
+                var error = _.slice(_.split(_.trim(msg.error), "\n"), -1)[0];
+                console.error(error);
             }
         });
 
