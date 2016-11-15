@@ -505,10 +505,25 @@ class DeviceUIPlugin {
             this.socket.emit("execute", request);
         });
         this.event_handler.on("mouseover", (data) => {
+            const t = _.join(["<dl class=\"Rtable Rtable--2cols Rtable--collapse\">",
+                              "<% _.forEach(properties, (v, k) => { %>  <dt class=\"Rtable-cell Rtable-cell--medium Rtable-cell--1of5\"><strong><%= k %>:</strong></dt>",
+                              "  <dd class=\"Rtable-cell Rtable-cell--4of5\"><%= v %></dd><% }) %>",
+                              "</dl>"], "");
+            const template = _.template(t);
+            widgets.electrode.node.innerHTML = 
+                template({properties: {ID: data.electrode_id,
+                                       Channels: _.join(this.device
+                                       .channels_by_electrode_id
+                                       [data.electrode_id], ", ")}});
+        });
+        this.event_handler.on("mouseover", (data) => {
             var circle_mesh = this.device_view.circles[data.electrode_id];
             if (!circle_mesh.material.visible) {
               circle_mesh.material.visible = true;
             }
+        });
+        this.event_handler.on("mouseout", (data) => {
+            widgets.electrode.node.innerHTML = "";
         });
         this.event_handler.on("mouseout", (data) => {
             var circle_mesh = this.device_view.circles[data.electrode_id];
