@@ -1,5 +1,5 @@
 from path_helpers import path
-from webui_plugin import install_requirements
+from microdrop_plugin_template import install_requirements
 
 
 if __name__ == '__main__':
