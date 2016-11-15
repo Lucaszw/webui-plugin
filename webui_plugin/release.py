@@ -40,7 +40,8 @@ if __name__ == '__main__':
             here = ph.path('.')
             for path_i in itertools.chain(here.files('*.py'),
                                           map(ph.path, ['properties.yml',
-                                                        'hooks',
+                                                        'hooks', 'public',
+                                                        'zmq_plugin_bridge',
                                                         'requirements.txt'])):
                 if path_i.exists():
                     tar.add(str(here.relpathto(path_i)))
