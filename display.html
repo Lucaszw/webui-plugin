@@ -23,22 +23,26 @@
 
         <script type='text/javascript'>
             $(window).on("load", function () {
+            var data = [{x: _.range(5),
+                         y: _.range(5),
+                         type: "scatter",
+                         mode: "markers"}];
+            var layout =  {showlegend: false,
+                           margin: {l: 40, r: 10, b: 40, t: 10},
+                           xaxis: {title: "time (s)"},
+                           yaxis: {title: "capacitance (F)"}};
+            var config = {showLink: false, displaylogo: false};
 
             var widgets = {three: new Widgets.ThreeRendererWidget(),
                            dat: new Widgets.DatGuiWidget({autoPlace: false}),
                            electrode: new PhosphorWidget.Widget(),
-                           plot: new PhosphorWidget.Widget()};
+                           plot: new PlotlyWidget({data: data, layout: layout,
+                                                   config: config})};
 
             widgets.three.title.text = "Device view";
             widgets.dat.title.text = "Options";
             widgets.electrode.title.text = "Electrode settings";
             widgets.plot.title.text = "Plot";
-            widgets.plot.onResize = (msg) => {
-                if ($(widgets.plot.node).hasClass("js-plotly-plot")) {
-                    Plotly.relayout(widgets.plot.node, {width: msg.width, height: msg.height});
-                    console.log(msg);
-                }
-            }
 
             var panel = new DockPanel();
             panel.id = 'main';
