@@ -658,6 +658,7 @@ class DeviceView {
     }
 
     setCircles(circles) {
+        this.resetCircles();
         this.circles = circles;
 
         this.circles_group = new THREE.Group();
