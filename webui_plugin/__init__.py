@@ -1,152 +1,106 @@
-import sys, traceback
-from datetime import datetime
+# -*- coding: utf-8 -*-
+import os
+import subprocess as sp
+import sys
 
-from path_helpers import path
-from flatland import Integer, Boolean, Form, String
-from flatland.validation import ValueAtLeast, ValueAtMost
+import path_helpers as ph
 from microdrop.logger import logger
-from microdrop.plugin_helpers import (AppDataController, StepOptionsController,
-                                      get_plugin_info)
+from microdrop.plugin_helpers import get_plugin_info
 from microdrop.plugin_manager import (PluginGlobals, Plugin, IPlugin,
-                                      implements, emit_signal)
-from microdrop.app_context import get_app
-import gobject
+                                      implements)
+
 
 PluginGlobals.push_env('microdrop.managed')
 
 
-class WebuiPlugin(Plugin, AppDataController, StepOptionsController):
-    """
-    This class is automatically registered with the PluginManager.
-    """
+def get_chrome_exe():
+    import _winreg
+
+    key = _winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE,
+                          'SOFTWARE\Microsoft\Windows\CurrentVersion'
+                          '\App Paths')
+    chrome_exe = ph.path(_winreg.QueryValue(key, 'chrome.exe'))
+    assert(chrome_exe.isfile())
+    return chrome_exe
+
+
+class WebuiPlugin(Plugin):
+    '''
+    When enabled, this plugin:
+
+     1. Starts a 0MQ plugin to sockets IO bridge server.
+     2. Starts a web server to serve static files.
+     3. Launches a web browser tab to show the MicroDrop web UI **(only Chrome
+        is currently supported)**.
+    '''
     implements(IPlugin)
-    version = get_plugin_info(path(__file__).parent).version
-    plugin_name = get_plugin_info(path(__file__).parent).plugin_name
-
-    '''
-    AppFields
-    ---------
-
-    A flatland Form specifying application options for the current plugin.
-    Note that nested Form objects are not supported.
-
-    Since we subclassed AppDataController, an API is available to access and
-    modify these attributes.  This API also provides some nice features
-    automatically:
-        -all fields listed here will be included in the app options dialog
-            (unless properties=dict(show_in_gui=False) is used)
-        -the values of these fields will be stored persistently in the microdrop
-            config file, in a section named after this plugin's name attribute
-    '''
-    AppFields = Form.of(
-        Integer.named('duration_ms').using(optional=True, default=750),
-        #Boolean.named('bool_field').using(optional=True, default=False),
-        #String.named('string_field').using(optional=True, default=''),
-    )
-
-    '''
-    StepFields
-    ---------
-
-    A flatland Form specifying the per step options for the current plugin.
-    Note that nested Form objects are not supported.
-
-    Since we subclassed StepOptionsController, an API is available to access and
-    modify these attributes.  This API also provides some nice features
-    automatically:
-        -all fields listed here will be included in the protocol grid view
-            (unless properties=dict(show_in_gui=False) is used)
-        -the values of these fields will be stored persistently for each step
-    '''
-    StepFields = Form.of(
-        #Integer.named('int_field').using(optional=True, default=750,
-                                          #validators=
-                                          #[ValueAtLeast(minimum=0),
-                                          # ValueAtMost(maximum=100000)]),
-        #Boolean.named('bool_field').using(optional=True, default=False),
-        #String.named('string_field').using(optional=True, default=''),
-    )
+    version = get_plugin_info(ph.path(__file__).parent).version
+    plugin_name = get_plugin_info(ph.path(__file__).parent).plugin_name
 
     def __init__(self):
         self.name = self.plugin_name
-        self.timeout_id = None
-        self.start_time = None
+        self._websockets_process = None
+        self._static_server_process = None
 
-    def on_step_run(self):
-        """
-        Handler called whenever a step is executed. Note that this signal
-        is only emitted in realtime mode or if a protocol is running.
+    def on_plugin_enable(self):
+        py_exe = sys.executable
+        # Note that `cwd` argument to `Popen` is not considered when searching
+        # the executable, so you the program’s path cannot be specified
+        # relative to `cwd`.
+        #
+        # We can work around this by actually switching to the new directory
+        # before launching the `Popen` process.
+        original_directory = os.getcwd()
 
-        Plugins that handle this signal must emit the on_step_complete
-        signal once they have completed the step. The protocol controller
-        will wait until all plugins have completed the current step before
-        proceeding.
-
-        return_value can be one of:
-            None
-            'Repeat' - repeat the step
-            or 'Fail' - unrecoverable error (stop the protocol)
-        """
-        app = get_app()
-        logger.info('[WebuiPlugin] on_step_run(): step #%d',
-                    app.protocol.current_step_number)
-        app_values = self.get_app_values()
+        # Start 0MQ to web sockets bridge (server).
         try:
-            if self.timeout_id is not None:
-                # Timer was already set, so cancel previous timer.
-                gobject.source_remove(self.timeout_id)
-
-            self.start_time = datetime.now()
-            gobject.idle_add(self.on_timer_tick, False)
-            self.timeout_id = gobject.timeout_add(app_values['duration_ms'],
-                                                  self.on_timer_tick)
-        except:
-            print "Exception in user code:"
-            print '-'*60
-            traceback.print_exc(file=sys.stdout)
-            print '-'*60
-            # An error occurred while initializing Analyst remote control.
-            emit_signal('on_step_complete', [self.name, 'Fail'])
-
-    def on_timer_tick(self, continue_=True):
-        '''
-        Args:
-            continue_ (bool) : If `False`, timer does not trigger again.
-        Returns:
-            (bool) : If `True`, timer triggers again.  If `False`, timer stops.
-        '''
+            os.chdir(ph.path(__file__).parent)
+            # The `CREATE_NEW_PROCESS_GROUP` flag is necessary for using
+            # `os.kill()` on the subprocess.
+            self._websockets_process = sp.Popen([py_exe, '-m',
+                                                 'zmq_plugin_bridge.app'],
+                                                creationflags=
+                                                sp.CREATE_NEW_PROCESS_GROUP)
+        finally:
+            os.chdir(original_directory)
+        # Start web server to serve static files.
         try:
-            emit_signal('on_step_complete', [self.name, None])
-            self.timeout_id = None
-            self.start_time = None
-            return False
+            os.chdir(ph.path(__file__).parent.joinpath('public'))
+            # The `CREATE_NEW_PROCESS_GROUP` flag is necessary for using
+            # `os.kill()` on the subprocess.
+            self._static_server_process = sp.Popen([py_exe, '-m',
+                                                    'SimpleHTTPServer'],
+                                                   creationflags=
+                                                   sp.CREATE_NEW_PROCESS_GROUP)
+        finally:
+            os.chdir(original_directory)
+
+        # Open UI web page.
+        try:
+            chrome_exe = get_chrome_exe()
+            sp.check_call([chrome_exe, self.url])
         except:
-            print "Exception in user code:"
-            print '-'*60
-            traceback.print_exc(file=sys.stdout)
-            print '-'*60
-            emit_signal('on_step_complete', [self.name, 'Fail'])
-            self.timeout_id = None
-            self.remote = None
-            return False
-        return continue_
+            import webbrowser
 
-    def on_step_options_swapped(self, plugin, old_step_number, step_number):
-        """
-        Handler called when the step options are changed for a particular
-        plugin.  This will, for example, allow for GUI elements to be
-        updated based on step specified.
+            webbrowser.open_new_tab(self.url)
+            logger.warn("Web UI is currently only supported using Chrome")
 
-        Parameters:
-            plugin : plugin instance for which the step options changed
-            step_number : step number that the options changed for
-        """
-        pass
+    @property
+    def url(self):
+        return 'http://localhost:8000/display.html'
 
-    def on_step_swapped(self, old_step_number, step_number):
-        """
-        Handler called when the current step is swapped.
-        """
+    def on_app_exit(self):
+        self.cleanup()
+
+    def on_plugin_disable(self):
+        self.cleanup()
+
+    def cleanup(self):
+        # Stop servers.
+        for process_i in ('_websockets_process', '_static_server_process'):
+            if getattr(self, process_i):
+                getattr(self, process_i).kill()
+                setattr(self, process_i, None)
 
 
 PluginGlobals.pop_env()
