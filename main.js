@@ -257,20 +257,34 @@ class EventHandler {
 
             var logHandler = (item) => console.log(item.text)
 
-            var electrode_commands = (this.df_commands.groupBy("namespace")["electrode"].groupBy("plugin_name"));
+            const electrode_commands =
+                (this.df_commands.groupBy("namespace")["electrode"]
+                 .groupBy("plugin_name"));
 
-            var f_electrode_menu_item =
+            const f_electrode_menu_item =
                 (row_i) => new MenuItem({text: row_i.title,
                                          handler:
-                    () => this.trigger("execute", {args: [row_i.plugin_name,
-                                                          row_i.command_name],
+                    () => {
+                        var request = {args: [row_i.plugin_name,
+                                              row_i.command_name],
                                        kwargs: {electrode_id:
-                                                electrode_id}})});
+                                                electrode_id}};
+                        this.trigger("execute", request);
+                    }});
 
-            var electrodeMenu = new Menu(_.map(electrode_commands,
-                                         (v, k) => new MenuItem({text: k, submenu: new PhosphorMenus.Menu(_.map(v.to_records(), f_electrode_menu_item))})));
+            const f_item_map = _fp.map(f_electrode_menu_item);
+            var electrodeMenu =
+                  new Menu(_.map(electrode_commands,
+                           (v, k) =>
+                           new MenuItem({text: k, submenu: new
+                                         Menu(f_item_map(v.to_records()))})));
 
             var contextMenu = new Menu([
+                new MenuItem({
+                  text: '&Set electrode channels...',
+                  handler: () => this.trigger('set-electrode-channels',
+                                              electrode_id)
+                }),
                 new MenuItem({
                   text: 'Clear all electrode &states',
                   handler: () => this.trigger('clear-electrode-states',
@@ -387,7 +401,40 @@ class DeviceUIPlugin {
                         _fp.map(_fp.at(["x", "y"])))(electrode_ids);
     }
 
+    setElectrodeChannels(electrode_id) {
+        var schema = {
+          "title": "Channel numbers",
+          "description": "Comma-separated list of channels (e.g., \"0,1,5\")",
+          "default": "",
+          "type": "string",
+          "pattern": "^([0-9]+ *(, *[0-9]+ *)*)?$"
+        };
+        var ajv = new Ajv(); // options can be passed, e.g. {allErrors: true}
+        var validate = ajv.compile(schema);
+        do {
+            var response = prompt("Enter comma-separated list of channels (e.g., \"0,1,5\") for electrode " + electrode_id,
+                                  _.join(this.device.channels_by_electrode_id[electrode_id], ", "));
+            if (response === null) {
+                // User clicked cancel.
+                return;
+            }
+            var valid = validate(response);
+            if (!valid) alert(validate.errors);
+        } while (!valid);
+        const f_str_to_channels =  _fp.pipe(_fp.trim, _fp.split(","),
+                                            _fp.map(parseInt),
+                                             _fp.filter((v) => v >= 0),
+                                            _.sortBy);
+        const channels = f_str_to_channels(response);
+        var request = {args: ['wheelerlab.device_info_plugin',
+                              'set_electrode_channels'],
+                       kwargs: {electrode_id: electrode_id,
+                                channels: channels}};
+        this.socket.emit("execute", request);
+    }
+
     listen(zmq_uri) {
+
         this.event_handler = new EventHandler(this.device_view);
         this.event_handler.listen();
         Key("escape", {el: this.device_view.three_widget.canvas},
@@ -470,6 +517,9 @@ class DeviceUIPlugin {
               circle_mesh.material.visible = false;
             }
         });
+        this.event_handler.on("set-electrode-channels", (electrode_id) => {
+            this.setElectrodeChannels(electrode_id);
+        });
 
         this.socket = io.connect(zmq_uri);
 
@@ -513,7 +563,14 @@ class DeviceUIPlugin {
             try {
                 if ((source == 'wheelerlab.device_info_plugin') &&
                     (msg_type == 'execute_reply')) {
-                    if (msg.content.command == 'get_device') {
+                    if (msg.content.command == 'set_electrode_channels') {
+                        data = ZmqPlugin.decode_content_data(msg);
+                        if (data) {
+                            // A plugin updated electrode channel assignments.
+                            // Refresh local device configuration.
+                            this.refresh_device();
+                        }
+                    } else if (msg.content.command == 'get_device') {
                         // A plugin requested device configuration from device
                         // info plugin.
                         data = ZmqPlugin.decode_content_data(msg);
@@ -525,8 +582,8 @@ class DeviceUIPlugin {
                 } else if ((source == 'wheelerlab.command_plugin') &&
                            (msg_type == 'execute_reply')) {
                     if (['get_commands', 'register_command',
-                        'unregister_command'].indexOf(msg['content']['command'])
-                        >= 0) {
+                         'unregister_command']
+                        .indexOf(msg['content']['command']) >= 0) {
                         /* Registered commands may have changed, so update
                          * local command registry. */
                         data = ZmqPlugin.decode_content_data(msg);
