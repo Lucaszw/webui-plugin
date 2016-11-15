@@ -500,6 +500,8 @@ class DeviceUIPlugin {
             () => this.event_handler.abortQueuing());
 
         // Protocol control keyboard shortcuts
+        Key("shift ; w q enter", {el: this.device_view.three_widget.canvas},
+            () => this.controlProtocol("save_protocol"));
         Key("shift 1 1", {el: this.device_view.three_widget.canvas},
             () => this.controlProtocol("save_protocol"));
         Key("r u n", {el: this.device_view.three_widget.canvas},
