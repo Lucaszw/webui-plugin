@@ -1016,3 +1016,108 @@ class Anchors {
         });
     }
 }
+
+
+class PlotlyOptions {
+  constructor(options={}) {
+    _.extend(this, Backbone.Events);
+    this.resetData(options.data);
+    this._layout = options.layout || {};
+    this._config = options.config || {};
+  }
+  get options() {
+    return {data: this.data, layout: this.layout, config: this.config};
+  }
+  set options(value) {
+    _.forEach(["data", "layout", "config"],
+      (k) => {
+        if (value[k]) {
+          this["_" + k] = value[k];
+        }
+    });
+    this.trigger("set-options", this.options);
+  }
+  resetData(data=null) {
+    this._data = data || [];
+    this.trigger("reset-data", this.data, this.options);
+  }
+  get data() { return this._data; }
+  set data(value) {
+    if (_.isArrayLike(value)) {
+      var data = _.clone(this._data);
+      this._data.length = 0;
+      _.merge(this._data, _.concat(data, value));
+      this.trigger("set-data", this.data, this.options);
+    }
+  }
+  get layout() { return this._layout; }
+  set layout(value) {
+    const size = _fp.pick(["width", "height"])(this._layout);
+    _.forEach(this._layout, (v, k) => delete this._layout[k]);
+    _.merge(this._layout, size, value);
+    this.trigger("set-layout", this.layout, this.options);
+  }
+  get config() { return this._config; }
+  set config(value) {
+    this._config = value;
+    this.trigger("set-config", this.config, this.options);
+  }
+}
+
+
+class PlotlyWidget extends PhosphorWidget.Widget {
+  /*
+   * Widget containing a single plotly plot.
+   */
+  constructor(options={}){
+    super();
+    this._options = new PlotlyOptions();
+    this.options = options;
+    this._plot = document.createElement('div');
+    this.node.appendChild(this._plot);
+    this._plotted = false;
+    this.addClass('PlotlyWidget');
+    this.options.on("reset-data", () => this.newPlot());
+    this.options.on("set-config", () => this.newPlot());
+    this.options.on("set-data", () => this.redraw());
+    this.options.on("set-layout", () => this.relayout());
+    this.options.on("set-options", () => this.newPlot());
+  }
+
+  onResize(msg) {
+      console.log("plotly resize", msg);
+      this.options.layout.width = msg.width;
+      this.options.layout.height = msg.height;
+      this.relayout();
+  }
+  newPlot() {
+    Plotly.newPlot(this.plot, this.options.options);
+    this._plotted = true;
+  }
+  redraw() {
+    if (!this.plotted) {
+      this.newPlot();
+    } else {
+      Plotly.redraw(this.plot);
+    }
+  }
+  relayout() {
+    if (!this.plotted) {
+      this.newPlot();
+    } else {
+      Plotly.relayout(this.plot, this.options.layout);
+    }
+  }
+  get plotted() { return this._plotted; }
+  get plot() { return this._plot; }
+  get options() { return this._options; }
+  set options(value) {
+    this.options.options = value;
+  }
+  purge() {
+    if (this.plotted) {
+      Plotly.purge(this.plot);
+      this._plotted = false;
+    }
+  }
+}

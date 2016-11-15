@@ -23,54 +23,26 @@
 
         <script type='text/javascript'>
             $(window).on("load", function () {
-/*
-            var device_ui_plugin;
-            $(window).on("load", function () {
-                // Create three.js scene, stats widget, and video (webcam) plane.
-                var deviceView = new DeviceView($("#canvasID")[0],
-                                                $("#controlHandles")[0]);
+            var data = [{x: _.range(5),
+                         y: _.range(5),
+                         type: "scatter",
+                         mode: "markers"}];
+            var layout =  {showlegend: false,
+                           margin: {l: 40, r: 10, b: 40, t: 10},
+                           xaxis: {title: "time (s)"},
+                           yaxis: {title: "capacitance (F)"}};
+            var config = {showLink: false, displaylogo: false};
 
-                // Change to an empty string to use the global namespace.
-                namespace = '/zmq_plugin';
-                // Listen for messages from 0MQ through socket.io proxy.
-                // e.g., when a new Microdrop device is loaded, draw device
-                // layout over video.
-                var params = new URLSearchParams(location.search.slice(1));
-                var zmq_transport = params.get('zmqtransport') || 'http';
-                var zmq_domain = params.get('zmqdomain') || document.domain;
-                var zmq_port = params.get('zmqport') || "5000";
-                var zmq_url = _.join([zmq_transport, '://', zmq_domain, ':',
-                                      zmq_port, namespace], "");
-                device_ui_plugin = new DeviceUIPlugin(deviceView);
-                device_ui_plugin.listen(zmq_url);
-
-                // Start rendering ([rate determined by browser][1]).
-                //
-                // [1]: https://developer.mozilla.org/en-US/docs/Web/API/window/requestAnimationFrame
-                function render() {
-                    deviceView.update();
-                    requestAnimationFrame(render);
-                }
-                render();
-
-                // Add buttons to `dat.gui` controls to load test images.
-                var testingFolder = deviceView.menu.addFolder("Testing");
-                var testFuncs = {'load 90 pin':
-                                 () => deviceView.loadSvg('device-90pin.svg'),
-                                 'load gcc':
-                                 () => deviceView.loadSvg('device-gcc.svg')};
-                testingFolder.add(testFuncs, 'load 90 pin');
-                testingFolder.add(testFuncs, 'load gcc');
-                // temp(deviceView.menu);
-            });
-*/
             var widgets = {three: new Widgets.ThreeRendererWidget(),
                            dat: new Widgets.DatGuiWidget({autoPlace: false}),
-                           electrode: new PhosphorWidget.Widget()};
+                           electrode: new PhosphorWidget.Widget(),
+                           plot: new PlotlyWidget({data: data, layout: layout,
+                                                   config: config})};
 
             widgets.three.title.text = "Device view";
             widgets.dat.title.text = "Options";
             widgets.electrode.title.text = "Electrode settings";
+            widgets.plot.title.text = "Plot";
 
             var panel = new DockPanel();
             panel.id = 'main';
@@ -78,6 +50,7 @@
             panel.insertLeft(widgets.three);
             panel.insertBottom(widgets.dat, widgets.three);
             panel.insertRight(widgets.electrode, widgets.dat);
+            panel.insertBottom(widgets.plot, widgets.electrode);
 
             panel.attach(document.body);
 
