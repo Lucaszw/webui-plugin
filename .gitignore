@@ -11,3 +11,4 @@ dist/
 setup.py
 paver-minilib.zip
 *.egg-info
+*.stackdump
