@@ -740,6 +740,8 @@ class Device {
                                           max_y - getY(row)));
         this.df_shapes.values = flipY(this.df_shapes.values);
 
+        this.electrode_areas = _.zipObject(json_device.electrode_areas.index,
+                                           json_device.electrode_areas.values);
         this.electrode_ids_by_channel = _.map(this.df_electrode_channels
                                               .groupRecordsBy("channel"),
                                               _fp.map(_fp
