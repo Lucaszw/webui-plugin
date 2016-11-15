@@ -15,9 +15,11 @@ setup(name='webui-plugin',
       url='https://github.com/wheeler-microfluidics/webui-plugin',
       license='GPL',
       packages=['webui_plugin'],
-      install_requires=['GitPython', 'microdrop-plugin-manager',
-                        'path-helpers', 'pip-helpers>=0.5.post8',
-                        'rename-package-files'],
+      install_requires=['Flask>=0.10.1', 'Flask_SocketIO', 'Jinja2>=2.7.3',
+                        'MarkupSafe>=0.23', 'Werkzeug>=0.10.4',
+                        'itsdangerous>=0.24', 'microdrop-plugin-manager',
+                        'path-helpers', 'python-engineio', 'python-socketio',
+                        'pyzmq>=15.2.0', 'rename-package-files' 'six>=1.9.0'],
       # Install data listed in `MANIFEST.in`
       include_package_data=True)
 
