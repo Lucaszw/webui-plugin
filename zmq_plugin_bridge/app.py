@@ -5,7 +5,8 @@ from gevent import monkey
 monkey.patch_all()
 from geventwebsocket.handler  import WebSocketHandler
 from zmq import green as zmq
-from zmq_plugin.schema import encode_content_data, PandasJsonEncoder
+from zmq_plugin.schema import (encode_content_data, pandas_object_hook,
+                               PandasJsonEncoder)
 import gevent
 import logging
 import monitor as mn
@@ -47,8 +48,11 @@ def reset(sid):
 def execute(sid, request):
     message = {'request': request, 'error': None, 'response': None}
 
+    kwargs = json.loads(json.dumps(request['kwargs']),
+                        object_hook=pandas_object_hook)
+
     try:
-        response = plugin.execute(*request['args'], **request['kwargs'])
+        response = plugin.execute(*request['args'], **kwargs)
     except Exception, exception:
         message['error'] = str(exception)
 
