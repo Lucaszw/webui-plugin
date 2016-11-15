@@ -487,12 +487,36 @@ class DeviceUIPlugin {
         this.socket.emit("execute", request);
     }
 
-    listen(zmq_uri) {
+    controlProtocol(command) {
+        this.socket.emit("execute",
+                         {args: ['microdrop.gui.protocol_controller',
+                                 command], kwargs: {}});
+    }
 
+    listen(zmq_uri) {
         this.event_handler = new EventHandler(this.device_view);
         this.event_handler.listen();
         Key("escape", {el: this.device_view.three_widget.canvas},
             () => this.event_handler.abortQueuing());
+
+        // Protocol control keyboard shortcuts
+        Key("shift 1 1", {el: this.device_view.three_widget.canvas},
+            () => this.controlProtocol("save_protocol"));
+        Key("r u n", {el: this.device_view.three_widget.canvas},
+            () => this.controlProtocol("run_protocol"));
+        Key("delete", {el: this.device_view.three_widget.canvas},
+            () => this.controlProtocol("delete_step"));
+        Key("a", {el: this.device_view.three_widget.canvas},
+            () => this.controlProtocol("first_step"));
+        Key("a", {el: this.device_view.three_widget.canvas},
+            () => this.controlProtocol("first_step"));
+        Key("s", {el: this.device_view.three_widget.canvas},
+            () => this.controlProtocol("prev_step"));
+        Key("d", {el: this.device_view.three_widget.canvas},
+            () => this.controlProtocol("next_step"));
+        Key("f", {el: this.device_view.three_widget.canvas},
+            () => this.controlProtocol("last_step"));
+
         this.event_handler.on("execute-routes", (electrode_id) => {
             /* Send request to execute routes for the specified electrode (or
              * all routes if `electrode_id` is `null`) */
