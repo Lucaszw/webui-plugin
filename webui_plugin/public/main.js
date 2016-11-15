@@ -592,7 +592,15 @@ class DeviceUIPlugin {
                 template({properties: {ID: data.electrode_id,
                                        Channels: _.join(this.device
                                        .channels_by_electrode_id
-                                       [data.electrode_id], ", ")}});
+                                       [data.electrode_id], ", "),
+                                       "Area (mm^2)": this.device
+                                       .electrode_areas[data.electrode_id],
+                                       "Width": this.device
+                                       .electrode_bounds[data.electrode_id]
+                                       .width,
+                                       "Height": this.device
+                                       .electrode_bounds[data.electrode_id]
+                                       .height}});
         });
         this.event_handler.on("mouseover", (data) => {
             var circle_mesh = this.device_view.circles[data.electrode_id];
