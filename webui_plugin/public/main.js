@@ -255,6 +255,55 @@ class EventHandler {
             const Menu = PhosphorMenus.Menu;
             const MenuItem = PhosphorMenus.MenuItem;
 
+            /* **TODO** **TODO** **TODO** **TODO** **TODO** **TODO** **TODO**
+             * **TODO** Display jsonschema editor to modify electrode channels.
+             * **TODO** **TODO** **TODO** **TODO** **TODO** **TODO** **TODO**
+             *
+             * See [here][1] or [here][2] for examples.
+             *
+             * See [here][3] for npm package.
+             *
+             * [1]: http://jeremydorn.com/json-editor/?schema=N4IgLglmA2CmIC4QGEAWBDAdp20AEmArgLYBGsATgM4gA04AngA7xLoUXoN0hSzE0EoMM1a9MYWAHNKPSDDFosOaCAC+9ACawAZukLQwiANoAGALr1CmCAEdCsAJKSBiMBQdqgAA&value=NoBgNAjAukA=&theme=html&iconlib=fontawesome4&object_layout=grid&show_errors=interaction&required_by_default&display_required_only&no_additional_properties&disable_edit_json&disable_collapse&disable_properties
+             * [2]: http://jeremydorn.com/json-editor/?schema=N4IgLglmA2CmIC4QGEAWBDAdp20AEmArgLYBGsATgM4gA0IAJrFQMYUQAOkA9poit2LF0AWiqwO6CujCwGeaBCpg83AGZ4WGbLip4AFLAB0AcyO08AHRAAGWgEZaAVmsBKOo1hr0haGH4eYACeHPBIyuyYJh6SYLIUfEgAevoA2jYiAJwAugDUeABU+hYF6Vl5ha4FrgD8ACQgAL5AA=&value=EQRgDANABAzJUBZhAAA=&theme=bootstrap3&iconlib=fontawesome4&object_layout=grid&show_errors=interaction&required_by_default&display_required_only&no_additional_properties&disable_edit_json&disable_collapse&disable_properties
+             * [3]: https://www.npmjs.com/package/json-editor
+             */
+              /*
+        def edit_electrode_channels(widget):
+            # Create schema to only accept a well-formed comma-separated list
+            # of integer channel numbers.  Default to list of channels
+            # currently mapped to electrode.
+            if shape in self.electrode_channels.index:
+                # If there is a single channel mapped to the electrode,
+                # the `...ix[shape]` lookup below returns a `pandas.Series`.
+                # However, if multiple channels are mapped to the electrode
+                # the `...ix[shape]` lookup returns a `pandas.DataFrame`.
+                # Calling `.values.ravel()` returns data in the same form in
+                # either situation.
+                current_channels = (self.electrode_channels.ix[shape]
+                                    .values.ravel().tolist())
+            else:
+                # Electrode has no channels currently mapped to it.
+                current_channels = []
+            schema = {'type': 'object',
+                      'properties': {'channels':
+                                     {'type': 'string', 'pattern':
+                                      r'^(\d+\s*(,\s*\d+\s*)*)?$',
+                                      'default':
+                                      ','.join(map(str, current_channels))}}}
+
+            try:
+                # Prompt user to enter a list of channel numbers (or nothing).
+                result = pgh.schema.schema_dialog(schema, device_name=False)
+            except ValueError:
+                pass
+            else:
+                # Well-formed (according to schema pattern) comma-separated
+                # list of channels was provided.
+                channels = sorted(set(map(int, filter(len, result['channels']
+                                                      .split(',')))))
+                self.emit('set-electrode-channels', shape, channels)
+              */
+
             var logHandler = (item) => console.log(item.text)
 
             const electrode_commands =
