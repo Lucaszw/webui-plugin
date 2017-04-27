@@ -1,7 +1,0 @@
-include RELEASE-VERSION
-include version.py
-include setup.py
-include paver-minilib.zip
-recursive-include webui_plugin *
-recursive-exclude webui_plugin *.pyc
-recursive-exclude webui_plugin *~
