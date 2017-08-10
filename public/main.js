@@ -486,14 +486,116 @@ class DeviceUIPlugin {
                                 channels: channels}};
         this.socket.emit("execute", request);
     }
-
     controlProtocol(command) {
         this.socket.emit("execute",
                          {args: ['microdrop.gui.protocol_controller',
                                  command], kwargs: {}});
     }
+    listen(client){
+      this.event_handler = new EventHandler(this.device_view);
+      this.event_handler.listen();
+      this.event_handler.on("set_electrode_state", (kwargs) => {
+          let data, message, topic;
 
-    listen(zmq_uri) {
+          topic = "microdrop/dmf-device-ui/set-electrode-state"
+          data  = kwargs
+
+          message = new Paho.MQTT.Message(JSON.stringify(data));
+          message.destinationName = topic;
+          client.send(message);
+      });
+
+      this.event_handler.on("electrode_queue_updated", (electrode_ids) => {
+          if (this.queue_mesh) {
+              this.device_view.three_widget.scene.remove(this.queue_mesh);
+          }
+          var queue_geometry =
+              THREELine2d.Line(this.centerCoordinates(electrode_ids),
+                               {distances: true});
+          this.queue_mesh = new THREE.Mesh(queue_geometry,
+                                           this.queue_material);
+          this.device_view.three_widget.scene.add(this.queue_mesh);
+      });
+
+      this.event_handler.on("electrode_queue_finished", (electrode_ids) => {
+          let data, message, topic;
+
+          if (this.queue_mesh) {
+              this.device_view.three_widget.scene.remove(this.queue_mesh);
+          }
+          if (!electrode_ids || electrode_ids.length < 0) {
+              return;
+          }
+
+          topic = "microdrop/dmf-device-ui/add-route"
+          data  = electrode_ids
+
+          message = new Paho.MQTT.Message(JSON.stringify(data));
+          message.destinationName = topic;
+          client.send(message);
+      });
+
+      this.event_handler.on("clear-electrode-states", () => {
+          let data, electrode_ids, message, topic;
+
+          electrode_ids = _.keys(this.device.channels_by_electrode_id);
+          topic = "microdrop/electrode-controller-plugin/set-electrode-states";
+          data  = {electrode_states: {index: electrode_ids, values: 0,
+                                           index_dtype: "str", dtype: "int",
+                                           type: "Series"}};
+
+          message = new Paho.MQTT.Message(JSON.stringify(data));
+          message.destinationName = topic;
+          client.send(message);
+      });
+
+      this.event_handler.on("clear-routes", (electrode_id) => {
+          /* Send request to clear routes for the specified electrode (or all
+           * routes if `electrode_id` is `null`) */
+          let data, message, topic;
+
+          topic = "microdrop/dmf-device-ui/clear-routes";
+          data = {electrode_id: electrode_id};
+          message = new Paho.MQTT.Message(JSON.stringify(data));
+          message.destinationName = topic;
+          client.send(message);
+      });
+
+      this.event_handler.on("execute-routes", (electrode_id) => {
+          /* Send request to execute routes for the specified electrode (or
+           * all routes if `electrode_id` is `null`) */
+          let data, message, topic;
+
+          topic = "microdrop/dmf-device-ui/execute-routes";
+          data  = {electrode_i: electrode_id};
+          message = new Paho.MQTT.Message(JSON.stringify(data));
+          message.destinationName = topic;
+          client.send(message);
+      });
+
+      this.event_handler.on("mouseover", (data) => {
+          const t = _.join(["<dl class=\"Rtable Rtable--2cols Rtable--collapse\">",
+                            "<% _.forEach(properties, (v, k) => { %>  <dt class=\"Rtable-cell Rtable-cell--medium Rtable-cell--1of5\"><strong><%= k %>:</strong></dt>",
+                            "  <dd class=\"Rtable-cell Rtable-cell--4of5\"><%= v %></dd><% }) %>",
+                            "</dl>"], "");
+          const template = _.template(t);
+          widgets.electrode.node.innerHTML =
+              template({properties: {ID: data.electrode_id,
+                                     Channels: _.join(this.device
+                                     .channels_by_electrode_id
+                                     [data.electrode_id], ", "),
+                                     "Area (mm^2)": this.device
+                                     .electrode_areas[data.electrode_id],
+                                     "Width": this.device
+                                     .electrode_bounds[data.electrode_id]
+                                     .width,
+                                     "Height": this.device
+                                     .electrode_bounds[data.electrode_id]
+                                     .height}});
+      });
+    }
+
+    listen_old(zmq_uri) {
         this.event_handler = new EventHandler(this.device_view);
         this.event_handler.listen();
         Key("escape", {el: this.device_view.three_widget.canvas},

@@ -1,96 +1,356 @@
 <!DOCTYPE html>
 
 <html>
-    <head>
-        <meta http-equiv="content-type" content="text/html; charset=UTF-8">
-        <link rel="stylesheet" type="text/css" media="screen" href="property-table.css" />
-        <link rel="stylesheet" type="text/css" media="screen" href="phosphor-menus.css" />
-        <link rel="stylesheet" type="text/css" media="screen" href="formatPlane.css" />
-        <link rel="stylesheet" type="text/css" media="screen" href="index.css" />
-        <script type="text/javascript" src="two.min.js"></script>
-        <script type="text/javascript" src="libDeviceUIPlugin.js"></script>
-        <script type="text/javascript" src="main.js"></script>
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+  <link href="//cdnjs.cloudflare.com/ajax/libs/datatables/1.10.15/css/jquery.dataTables.min.css" rel="stylesheet" />
+  <link rel="stylesheet" type="text/css" media="screen" href="property-table.css" />
+  <link rel="stylesheet" type="text/css" media="screen" href="phosphor-menus.css" />
+  <link rel="stylesheet" type="text/css" media="screen" href="formatPlane.css" />
+  <link rel="stylesheet" type="text/css" media="screen" href="index.css" />
+  <script type="text/javascript" src="two.min.js"></script>
+  <script type="text/javascript" src="libDeviceUIPlugin.js"></script>
+  <script src="//cdnjs.cloudflare.com/ajax/libs/datatables/1.10.15/js/jquery.dataTables.min.js"></script>
+  <script src="//cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js" type="text/javascript"></script>
+  <script type="text/javascript" src="main.js"></script>
+  <!--Include PhosphorJS bundle-->
+  <!--<script type="text/javascript" src="bundle.js"></script>-->
+</head>
 
-        <!--Include PhosphorJS bundle-->
-        <!--<script type="text/javascript" src="bundle.js"></script>-->
-    </head>
+<body>
+  <div id="two-canvas" style="position: absolute;"></div>
+  <div id="container">
+    <div id="Stats-output"></div>
+    <svg id="controlHandles"></svg>
+  </div>
 
-    <body>
-        <div id="container">
-            <div id="Stats-output"></div>
-            <svg id="controlHandles"></svg>
-        </div>
+  <script type='text/javascript'>
+  let config, data, datatable, deviceView, device_ui_plugin, layout,
+      mqttcontroller, panel, schemas, widgets;
 
-        <script type='text/javascript'>
-            $(window).on("load", function () {
-            var data = [{x: _.range(5),
-                         y: _.range(5),
-                         type: "scatter",
-                         mode: "markers"}];
-            var layout =  {showlegend: false,
-                           margin: {l: 40, r: 10, b: 40, t: 10},
-                           xaxis: {title: "time (s)"},
-                           yaxis: {title: "capacitance (F)"}};
-            var config = {showLink: false, displaylogo: false};
+  // Disable alert messages in datatables:
+  $.fn.dataTable.ext.errMode = 'throw';
 
-            var widgets = {three: new Widgets.ThreeRendererWidget(),
-                           dat: new Widgets.DatGuiWidget({autoPlace: false}),
-                           electrode: new PhosphorWidget.Widget(),
-                           plot: new PlotlyWidget({data: data, layout: layout,
-                                                   config: config})};
+  class ProtocolController {
+    constructor(element) {
+      this.element = element;
+      this.table = null;
+      this.schemas = new Object();
+      this.data = new Array();
+      this.columns = new Array();
+    }
 
-            widgets.three.title.text = "Device view";
-            widgets.dat.title.text = "Options";
-            widgets.electrode.title.text = "Electrode settings";
-            widgets.plot.title.text = "Plot";
+    addSchema(key,data){
+      this.schemas[key] = data;
+      this.initTable();
+    }
 
-            var panel = new DockPanel();
-            panel.id = 'main';
+    step_options_updated(msg){
+      const step_options = JSON.parse(msg.payloadString);
+      const step_count = step_options.length;
+      const data_count = this.data.length;
 
-            panel.insertLeft(widgets.three);
-            panel.insertBottom(widgets.dat, widgets.three);
-            panel.insertRight(widgets.electrode, widgets.dat);
-            panel.insertTabAfter(widgets.plot, widgets.electrode);
-
-            panel.attach(document.body);
-
-            // Create three.js scene, stats widget, and video (webcam) plane.
-            var deviceView = new DeviceView(widgets.three, widgets.dat.gui);
-            /*
-            var deviceView = new DeviceView(widgets.three.canvas,
-                                            widgets.three
-                                            .control_handles_element,
-                                            widgets.dat.gui);
-                                            */
-
-            // Change to an empty string to use the global namespace.
-            namespace = '/zmq_plugin';
-            // Listen for messages from 0MQ through socket.io proxy.
-            // e.g., when a new Microdrop device is loaded, draw device
-            // layout over video.
-            var params = new URLSearchParams(location.search.slice(1));
-            var zmq_transport = params.get('zmqtransport') || 'http';
-            var zmq_domain = params.get('zmqdomain') || document.domain;
-            var zmq_port = params.get('zmqport') || "5000";
-            var zmq_url = _.join([zmq_transport, '://', zmq_domain, ':',
-                                  zmq_port, namespace], "");
-            device_ui_plugin = new DeviceUIPlugin(deviceView);
-            device_ui_plugin.listen(zmq_url);
-
-            // Start rendering ([rate determined by browser][1]).
-            //
-            // [1]: https://developer.mozilla.org/en-US/docs/Web/API/window/requestAnimationFrame
-            function render() {
-                deviceView.update();
-                requestAnimationFrame(render);
-            }
-            render();
-
-            window.onresize = () => { panel.update(); };
-
-            window.panel = panel;
-            window.widgets = widgets;
+      // If rows have been removed, remove them from data:
+      if (data_count - step_count > 0){
+        this.data = _.slice(this.data, 0,step_count);
+        _.each(_.range(step_count,data_count), () => {
+          this.table.row().remove();
         });
-        </script>
-    </body>
+      }
+
+      // Update data with modified schema values
+      _.each(step_options, (step,i) => {
+        const extended_steps = _.extend({step: i},this.data[i],step);
+        this.data[i] = extended_steps;
+      });
+
+      // Update step with new step options
+      this.updateTable();
+    }
+
+    droplet_planning_plugin_schema(msg) {
+      const schema = JSON.parse(msg.payloadString);
+      this.addSchema("droplet_planning_plugin", schema);
+    }
+
+    dmf_device_ui_plugin_schema(msg) {
+      const schema = JSON.parse(msg.payloadString);
+      this.addSchema("dmf_device_ui_plugin", schema);
+    }
+
+    updateTable() {
+      _.each(this.data, this.updateRow.bind(this));
+    }
+
+    updateRow(step_options, step_number){
+      let data;
+      const numberOfColumns = this.table.columns().header().length;
+      const arr = _.map(new Array(numberOfColumns), _.constant(""));
+
+      data = _.zipObject(this.columns, arr);
+
+      if (step_number > this.table.rows().count()){
+        console.error("Number of rows less than step number.");
+        return;
+      } else if (step_number == this.table.rows().count()){
+        this.table.row.add(data);
+      }
+
+      _.extend(data, step_options);
+      this.table.row(step_number).data(data).draw();
+    }
+
+    initTable() {
+      let columns;
+
+      // Create dom element to house datatable
+      const elem = D("<table width='100%'></table>");
+      elem.setStyles({"font-size": "13px"});
+
+      // remove, and recreate table
+      if (this.table) {
+        const node = this.table.table().node();
+        this.table.destroy();
+        this.element.removeChild(node);
+      }
+
+      // Combine Schemas to get columns:
+      const data = new Object();
+      _.each(_.values(this.schemas), (s) => {_.extend(data,s)});
+      columns = _.map(data, (v,k) => {return {title: k, data: k}});
+
+      // XXX: Manually placing step column at first index (so that the table)
+      // sorts by the this column by default:
+      columns = _.concat([{title: "step", data: "step"}], columns);
+      // XXX: Add sort key to data so that it is used in this.columns
+      data.step = ""
+
+      // Create jquery selector:
+      const table = $(elem[0]);
+      table.appendTo(this.element);
+
+      this.table = table.DataTable({columns: columns, ordering: false});
+      this.columns = _.concat(_.keys(data));
+
+      return this.table;
+    }
+  }
+
+  class UIController {
+    device_swapped(msg) {
+      let data, device;
+      data = JSON.parse(msg.payloadString);
+      device = new Device(data);
+      device_ui_plugin.setDevice(device);
+      window.data = data;
+      window.device = device;
+    }
+
+    set_electrode_states(msg) {
+      let data, electrode_states;
+      data = JSON.parse(msg.payloadString);
+      electrode_states = extractElectrodeStates(data);
+      device_ui_plugin.applyElectrodeStates(electrode_states);
+    }
+
+    routes_set(msg) {
+      let data, df_routes;
+      data = JSON.parse(msg.payloadString);
+      df_routes = new DataFrame(data);
+      device_ui_plugin.setRoutes(df_routes);
+    }
+  }
+
+  class MQTTController {
+    constructor(protocolcontroller, uicontroller) {
+      this.protocolcontroller = protocolcontroller;
+      this.uicontroller = uicontroller;
+
+      this.client = new Paho.MQTT.Client("localhost", 8083, "web-ui");
+      this.client.onMessageArrived = this.onMessageArrived.bind(this);
+      this.client.connect({onSuccess: this.onConnect.bind(this)});
+
+      const routes = new Object();
+      routes.device_swapped = "microdrop/device-info-plugin/device-swapped";
+      routes.set_electrode_states = "microdrop/electrode-controller-plugin/set-electrode-states";
+      routes.routes_set = "microdrop/droplet-planning-plugin/routes-set";
+      routes.droplet_planning_plugin_schema = "microdrop/droplet-planning-plugin/schema";
+      routes.droplet_planning_plugin_step_options = "microdrop/droplet-planning-plugin/step-options";
+      routes.dmf_device_ui_plugin_schema = "microdrop/dmf-device-ui-plugin/schema";
+      routes.dmf_device_ui_plugin_step_options = "microdrop/dmf-device-ui-plugin/step-options";
+
+      this.routes = routes;
+    }
+
+    onConnect() {
+      // MQTT Callback after establishing brocker connection
+      console.log("Connection Established.");
+      this.client.subscribe("microdrop/#");
+    }
+
+    onMessageArrived(msg){
+      // MQTT Callback after receiving a message
+      const route = msg.destinationName;
+      const routes = this.routes;
+      const protocolcontroller = this.protocolcontroller;
+      const uicontroller = this.uicontroller;
+      // console.log(route);console.log(msg);
+
+      if (route == routes.device_swapped)
+        uicontroller.device_swapped(msg);
+      if (route == routes.dmf_device_ui_plugin_step_options)
+        protocolcontroller.step_options_updated(msg);
+      if (route == routes.droplet_planning_plugin_step_options)
+          protocolcontroller.step_options_updated(msg);
+      if (route == routes.droplet_planning_plugin_schema)
+        protocolcontroller.droplet_planning_plugin_schema(msg);
+      if (route == routes.dmf_device_ui_plugin_schema)
+        protocolcontroller.dmf_device_ui_plugin_schema(msg);
+      if (route == routes.set_electrode_states)
+        uicontroller.set_electrode_states(msg);
+      if (route == routes.routes_set)
+        uicontroller.routes_set(msg);
+    }
+  }
+
+  const onresize = () => {
+    panel.update();
+  }
+
+  const render = () => {
+    deviceView.update();
+    requestAnimationFrame(render);
+  }
+
+  const load = () => {
+
+    data = new Object();
+    data.x    = _.range(5);
+    data.y    = _.range(5);
+    data.type = "scatter";
+    data.mode = "markers";
+
+    layout = new Object();
+    layout.margin = {l: 40, r: 10, b: 40, t: 10};
+    layout.xaxis  = {title: "time (s)"};
+    layout.yaxis  = {title: "capacitance (F)"};
+
+    config = new Object();
+    config.showLink = false;
+    config.displaylogo = false;
+
+    widgets = new Object();
+    widgets.dat =  new Widgets.DatGuiWidget({autoPlace: false});
+    widgets.dat.title.text = "Options";
+    widgets.three = new Widgets.ThreeRendererWidget();
+    widgets.three.title.text = "Device view";
+    widgets.electrode = new PhosphorWidget.Widget();
+    widgets.electrode.title.text = "Electrode settings";
+    widgets.plot = new PlotlyWidget({data: data, layout: layout, config: config});
+    widgets.plot.title.text = "Plot";
+    widgets.protocolTable = new PhosphorWidget.Widget();
+    widgets.protocolTable.title.text = "Protocol Table";
+
+    panel = new DockPanel();
+    panel.id = 'main';
+    panel.insertLeft(widgets.three);
+    panel.insertBottom(widgets.dat, widgets.three);
+    panel.insertTabAfter(widgets.protocolTable, widgets.dat);
+    panel.insertRight(widgets.electrode, widgets.protocolTable);
+    panel.insertTabAfter(widgets.plot, widgets.electrode);
+    panel.attach(document.body);
+
+    deviceView = new DeviceView(widgets.three, widgets.dat.gui);
+    device_ui_plugin = new DeviceUIPlugin(deviceView);
+
+    // this.uicontroller = new UIController();
+
+    // datatable = createProtocolTable(widgets.protocolTable.node);
+
+    // Initialize Controllers:
+    const protocolcontroller = new ProtocolController(widgets.protocolTable.node);
+    const uicontroller = new UIController();
+
+    // Connect Controllers to MQTT (for routing):
+    mqttcontroller   = new MQTTController(protocolcontroller, uicontroller);
+    device_ui_plugin.listen(mqttcontroller.client);
+
+
+    render();
+  }
+
+  $(window).on("load", load);
+
+  //     $(window).on("load", function () {
+  //     var data = [{x: _.range(5),
+  //                  y: _.range(5),
+  //                  type: "scatter",
+  //                  mode: "markers"}];
+  //     var layout =  {showlegend: false,
+  //                    margin: {l: 40, r: 10, b: 40, t: 10},
+  //                    xaxis: {title: "time (s)"},
+  //                    yaxis: {title: "capacitance (F)"}};
+  //     var config = {showLink: false, displaylogo: false};
+  //
+  //     var widgets = {three: new Widgets.ThreeRendererWidget(),
+  //                    dat: new Widgets.DatGuiWidget({autoPlace: false}),
+  //                    electrode: new PhosphorWidget.Widget(),
+  //                    plot: new PlotlyWidget({data: data, layout: layout,
+  //                                            config: config})};
+  //
+  //     widgets.three.title.text = "Device view";
+  //     widgets.dat.title.text = "Options";
+  //     widgets.electrode.title.text = "Electrode settings";
+  //     widgets.plot.title.text = "Plot";
+  //
+  //     var panel = new DockPanel();
+  //     panel.id = 'main';
+  //
+  //     panel.insertLeft(widgets.three);
+  //     panel.insertBottom(widgets.dat, widgets.three);
+  //     panel.insertRight(widgets.electrode, widgets.dat);
+  //     panel.insertTabAfter(widgets.plot, widgets.electrode);
+  //
+  //     panel.attach(document.body);
+  //
+  //     // Create three.js scene, stats widget, and video (webcam) plane.
+  //     var deviceView = new DeviceView(widgets.three, widgets.dat.gui);
+  //     /*
+  //     var deviceView = new DeviceView(widgets.three.canvas,
+  //                                     widgets.three
+  //                                     .control_handles_element,
+  //                                     widgets.dat.gui);
+  //                                     */
+  //
+  //     // Change to an empty string to use the global namespace.
+  //     namespace = '/zmq_plugin';
+  //     // Listen for messages from 0MQ through socket.io proxy.
+  //     // e.g., when a new Microdrop device is loaded, draw device
+  //     // layout over video.
+  //     var params = new URLSearchParams(location.search.slice(1));
+  //     var zmq_transport = params.get('zmqtransport') || 'http';
+  //     var zmq_domain = params.get('zmqdomain') || document.domain;
+  //     var zmq_port = params.get('zmqport') || "5000";
+  //     var zmq_url = _.join([zmq_transport, '://', zmq_domain, ':',
+  //                           zmq_port, namespace], "");
+  //     device_ui_plugin = new DeviceUIPlugin(deviceView);
+  //     device_ui_plugin.listen(zmq_url);
+  //
+  //     // Start rendering ([rate determined by browser][1]).
+  //     //
+  //     // [1]: https://developer.mozilla.org/en-US/docs/Web/API/window/requestAnimationFrame
+  //     function render() {
+  //         deviceView.update();
+  //         requestAnimationFrame(render);
+  //     }
+
+  //     render();
+  //
+  //     window.onresize = () => { panel.update(); };
+  //
+  //     window.panel = panel;
+  //     window.widgets = widgets;
+  // });
+  </script>
+</body>
 </html>
