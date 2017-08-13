@@ -539,7 +539,7 @@ class DeviceUIPlugin {
           let data, electrode_ids, message, topic;
 
           electrode_ids = _.keys(this.device.channels_by_electrode_id);
-          topic = "microdrop/electrode-controller-plugin/set-electrode-states";
+          topic = "microdrop/dmf-device-ui/set-electrode-states";
           data  = {electrode_states: {index: electrode_ids, values: 0,
                                            index_dtype: "str", dtype: "int",
                                            type: "Series"}};

@@ -33,16 +33,292 @@
 
   class ProtocolController {
     constructor(element) {
+      _.extend(this, Backbone.Events);
+      this.buttons = new Object();
       this.element = element;
-      this.table = null;
+      this.table   = null;
       this.schemas = new Object();
-      this.data = new Array();
-      this.columns = new Array();
+      this.data    = new Array();
+      this.canDelete = false;
+      this.initControls();
+      this.listen();
+    }
+
+    listen() {
+      this.on("mousedown", this.onMousedown.bind(this));
+      this.on("prev-step-clicked", this.onPrevStepClicked.bind(this));
+      this.on("next-step-clicked", this.onNextStepClicked.bind(this));
+      this.on("play-clicked", this.onPlayClicked.bind(this));
+      Key("delete", this.onDelete.bind(this));
+      D(this.element).on("mouseout", this.onMouseout.bind(this));
+    }
+
+    onPlayClicked(e) {
+      this.trigger("change-protocol-state", this.step);
+    }
+
+    onPrevStepClicked(e) {
+      let prevStep;
+      if (this.step == 0) prevStep = this.data.length -1;
+      if (this.step != 0) prevStep = this.step-1;
+      this.trigger("change-step", prevStep);
+    }
+
+    onNextStepClicked(e) {
+      const lastStep = this.data.length - 1;
+      if (this.step == lastStep) this.trigger("insert-step", lastStep);
+      if (this.step != lastStep) this.trigger("change-step", this.step+1);
+    }
+
+    onDelete(e) {
+      // XXX: Currently using variable to ensure mouse is inside table before
+      //      should use a element target with delete event (but wasnt working)
+      if (this.canDelete == false) return;
+      this.canDelete = false;
+      this.trigger("delete", this.step);
+    }
+
+    onMouseout(e) {
+      if (e.target != this.element) return;
+      this.canDelete = false;
+    }
+
+    onMousedown(msg) {
+      window.msg = msg;
+      if (msg.target.nodeName != "TD") return;
+      const src     = this.table.column(msg.target).dataSrc();
+      const schema  = this.schema[src]
+
+      // If step not selected, change step and exit
+      const step = this.table.row(msg.target)[0][0];
+      if (step != this.step){
+        this.changeStep(step);
+        this.canDelete = true;
+        return;
+      }
+
+      // XXX: Not all columns are part in schema, therefore undefined
+      if (!schema) return;
+      if (schema.type == "boolean") this.activateCheckbox(msg);
+      if (schema.type == "number")  this.activateSpinner(msg);
+    }
+
+    modifyData(key,val,step) {
+      // TODO: keep original datatype after modification
+      const data = _.cloneDeep(this.data);
+      data[step][key] = val;
+      this.trigger("update", data);
+    }
+
+    changeStep(number) {
+      this.trigger("change-step", number);
+    }
+
+    activateCheckbox(msg) {
+      const target_d = D(msg.target);
+      const input_d  = D('<input type="checkbox">');
+      const src      = this.table.column(msg.target).dataSrc();
+
+      // Wrap tabel cell in checkbox:
+      const previous_val = JSON.parse(target_d.innerText);
+      target_d.empty();
+      if (previous_val)  input_d.setAttribute("checked", true);
+      if (!previous_val) input_d.removeAttribute("checked");
+      target_d.appendChild(input_d.el);
+
+      input_d.on("blur", () => {
+        // When out of focus, unwrap cell, and modify data
+        const new_val = input_d.el.checked;
+        input_d.off();
+        target_d.empty();
+        this.modifyData(src, new_val, this.step);
+      });
+
+    }
+
+    activateSpinner(msg) {
+      const target_d = D(msg.target);
+      const input_d  = D('<input type="number">');
+      const src      = this.table.column(msg.target).dataSrc();
+      const schema   = this.schema[src]
+
+      // Wrap tabel cell in textfield:
+      const previous_val = target_d.innerText;
+      target_d.empty();
+      input_d.value = previous_val;
+
+      if (schema.minimum !== undefined)
+        input_d.setAttribute("min", schema.minimum)
+      if (schema.maximum !== undefined)
+        input_d.setAttribute("max", schema.maximum)
+
+      target_d.appendChild(input_d.el);
+
+      input_d.on("blur", () => {
+        // When out of focus, unwrap cell, and modify data
+        const new_val = JSON.parse(input_d.value);
+        input_d.off();
+        target_d.empty();
+        this.modifyData(src, new_val, this.step);
+      });
+
+      // XXX: Setting focus immediately doesn't work (wait 100ms)
+      setTimeout(() => input_d.focus(), 100);
+    }
+
+    get styles() {
+      const styles = new Object();
+      styles.unselected = {background: "white", color: "black"};
+      styles.selected   = {background: "#22509b", color: "white"};
+      return styles;
+    }
+
+    set step(number) {
+      const table_d = D(this.table.table().node());
+      const rows    = D('tr', table_d);
+      // If row undefined then add step
+      if (this.table.row(number).node() == null) {
+        console.warn("Attempted to set step beyond table size, creating new step");
+        this.addStep();
+      }
+      // Change selected step
+      const row_d  = D(this.table.row(number).node());
+      rows.forEach((i)=> D(i).setStyles(this.styles.unselected));
+      row_d.setStyles(this.styles.selected);
+    }
+
+    get step() {
+      const row = D('tr', this.table.table().node()).filter(div => {
+        return div.style.color == "white"
+      });
+      if (row[0])  return this.table.row(row)[0][0];
+      if (!row[0]) return null;
+    }
+
+    get columns() {
+      const schema = this.schema;
+      return _.concat(["step"], _.keys(schema));
+    }
+
+    get headers() {
+      const schema = this.schema;
+      const headers = _.map(schema, this.getHeader);
+      const stepHeader = this.getHeader(null, "step");
+      // XXX: Manually placing step column at first index (so that the table
+      //      sorts by the this column by default):
+      return _.concat([stepHeader], headers);
+    }
+
+    get schema() {
+      // Get total schema (from all schemas)
+      const schema = new Object();
+      _.each(_.values(this.schemas), (s) => {_.extend(schema,s)});
+      return schema;
+    }
+
+    getHeader(v,k) {
+      // Get DataTables header based on schema entry
+      // TODO: add more keys like type, width, etc
+      return {title: k, data: k};
     }
 
     addSchema(key,data){
       this.schemas[key] = data;
       this.initTable();
+    }
+
+    updateTable() {
+      _.each(this.data, this.updateRow.bind(this));
+    }
+
+    updateRow(step_options, step_number){
+      const numberOfColumns = this.table.columns().header().length;
+      const arr  = _.map(new Array(numberOfColumns), _.constant(""));
+      const data = _.zipObject(this.columns, arr);
+
+      if (step_number > this.table.rows().count()){
+        console.error("Number of rows less than step number.");
+        return;
+      } else if (step_number == this.table.rows().count()){
+        this.table.row.add(data);
+      }
+
+      _.extend(data, step_options);
+      this.table.row(step_number).data(data).draw();
+    }
+
+    initControls() {
+      const btn = new Object();
+
+      btn.leftbtn  = D("<button type='button'>Prev</button>");
+      btn.playbtn  = D("<button type='button'>Play</button>");
+      btn.rightbtn = D("<button type='button'>Next</button>");
+
+      btn.leftbtn.on("click",  event => this.trigger("prev-step-clicked",event));
+      btn.playbtn.on("click",  event => this.trigger("play-clicked",event));
+      btn.rightbtn.on("click", event => this.trigger("next-step-clicked",event));
+
+      this.element.appendChild(btn.leftbtn.el);
+      this.element.appendChild(btn.playbtn.el);
+      this.element.appendChild(btn.rightbtn.el);
+
+      this.buttons = btn;
+    }
+
+    initTable() {
+      let columns;
+
+      // remove, and recreate table
+      if (this.table) {
+        const node = this.table.table().node();
+        this.table.destroy();
+        this.element.removeChild(node);
+      }
+
+      // Create dom element to house datatable
+      const elem = D("<table></table>");
+      elem.setStyles({"font-size": "13px"});
+      elem.addClasses("cell-border compact hover");
+      elem.on("mousedown", event => this.trigger("mousedown", event));
+
+      // Display options for datatable:
+      const options = new Object();
+      options.info = false;
+      options.columns = this.headers;
+      options.ordering = false;
+      options.searching = false;
+      options.paginate = false;
+
+      // Initialize datatable
+      const table_jq = $(elem[0]);
+      table_jq.appendTo(this.element);
+      this.table = table_jq.DataTable(options);
+
+      return this.table;
+    }
+
+    step_swapped(msg){
+      const step = JSON.parse(msg.payloadString);
+      this.step = step;
+      this.canDelete = true;
+    }
+
+    addStep() {
+      const len = this.columns.length;
+      const row = _.zipObject(this.columns, new Array(len).join(".").split("."));
+
+      this.table.row.add(row);
+      this.table.draw();
+    }
+
+    protocol_state(msg){
+      console.log("Changing protocol state:"); console.log(msg.payloadString);
+      const state = JSON.parse(msg.payloadString);
+      console.log(this.buttons);
+
+      if (state == "running")   this.buttons.playbtn.innerText = "Pause";
+      if (state == "paused") this.buttons.playbtn.innerText = "Play";
+
     }
 
     step_options_updated(msg){
@@ -78,67 +354,11 @@
       this.addSchema("dmf_device_ui_plugin", schema);
     }
 
-    updateTable() {
-      _.each(this.data, this.updateRow.bind(this));
-    }
-
-    updateRow(step_options, step_number){
-      let data;
-      const numberOfColumns = this.table.columns().header().length;
-      const arr = _.map(new Array(numberOfColumns), _.constant(""));
-
-      data = _.zipObject(this.columns, arr);
-
-      if (step_number > this.table.rows().count()){
-        console.error("Number of rows less than step number.");
-        return;
-      } else if (step_number == this.table.rows().count()){
-        this.table.row.add(data);
-      }
-
-      _.extend(data, step_options);
-      this.table.row(step_number).data(data).draw();
-    }
-
-    initTable() {
-      let columns;
-
-      // Create dom element to house datatable
-      const elem = D("<table width='100%'></table>");
-      elem.setStyles({"font-size": "13px"});
-
-      // remove, and recreate table
-      if (this.table) {
-        const node = this.table.table().node();
-        this.table.destroy();
-        this.element.removeChild(node);
-      }
-
-      // Combine Schemas to get columns:
-      const data = new Object();
-      _.each(_.values(this.schemas), (s) => {_.extend(data,s)});
-      columns = _.map(data, (v,k) => {return {title: k, data: k}});
-
-      // XXX: Manually placing step column at first index (so that the table)
-      // sorts by the this column by default:
-      columns = _.concat([{title: "step", data: "step"}], columns);
-      // XXX: Add sort key to data so that it is used in this.columns
-      data.step = ""
-
-      // Create jquery selector:
-      const table = $(elem[0]);
-      table.appendTo(this.element);
-
-      this.table = table.DataTable({columns: columns, ordering: false});
-      this.columns = _.concat(_.keys(data));
-
-      return this.table;
-    }
   }
 
   class UIController {
     device_swapped(msg) {
-      let data, device;
+      let data, device, electrode_states;
       data = JSON.parse(msg.payloadString);
       device = new Device(data);
       device_ui_plugin.setDevice(device);
@@ -149,8 +369,19 @@
     set_electrode_states(msg) {
       let data, electrode_states;
       data = JSON.parse(msg.payloadString);
+      this.electrode_states = extractElectrodeStates(data);
+      device_ui_plugin.applyElectrodeStates(this.electrode_states);
+    }
+
+    get_channel_states(msg) {
+      // TODO: implement channel_states, and actuated_area
+      let data, electrode_states, channel_states, actuated_area;
+      data = JSON.parse(msg.payloadString);
       electrode_states = extractElectrodeStates(data);
-      device_ui_plugin.applyElectrodeStates(electrode_states);
+      _.each(this.electrode_states, (v,k) => {this.electrode_states[k] = false});
+
+      this.electrode_states = _.extend(this.electrode_states, electrode_states);
+      device_ui_plugin.applyElectrodeStates(this.electrode_states);
     }
 
     routes_set(msg) {
@@ -163,6 +394,8 @@
 
   class MQTTController {
     constructor(protocolcontroller, uicontroller) {
+      _.extend(this, Backbone.Events);
+
       this.protocolcontroller = protocolcontroller;
       this.uicontroller = uicontroller;
 
@@ -171,21 +404,62 @@
       this.client.connect({onSuccess: this.onConnect.bind(this)});
 
       const routes = new Object();
+
+      // Device Info Plugin:
       routes.device_swapped = "microdrop/device-info-plugin/device-swapped";
-      routes.set_electrode_states = "microdrop/electrode-controller-plugin/set-electrode-states";
-      routes.routes_set = "microdrop/droplet-planning-plugin/routes-set";
-      routes.droplet_planning_plugin_schema = "microdrop/droplet-planning-plugin/schema";
-      routes.droplet_planning_plugin_step_options = "microdrop/droplet-planning-plugin/step-options";
+
+      // DMF Device UI Plugin:
       routes.dmf_device_ui_plugin_schema = "microdrop/dmf-device-ui-plugin/schema";
       routes.dmf_device_ui_plugin_step_options = "microdrop/dmf-device-ui-plugin/step-options";
 
+      // Droplet Planning Plugin:
+      routes.droplet_planning_plugin_schema = "microdrop/droplet-planning-plugin/schema";
+      routes.droplet_planning_plugin_step_options = "microdrop/droplet-planning-plugin/step-options";
+      routes.routes_set = "microdrop/droplet-planning-plugin/routes-set";
+
+      // Electrode Controller Plugin:
+      routes.set_electrode_states = "microdrop/electrode-controller-plugin/set-electrode-states";
+      routes.get_channel_states = "microdrop/electrode-controller-plugin/get-channel-states";
+
+      // MQTT Controller Plugin:
+      routes.protocol_state = "microdrop/mqtt-plugin/protocol-state";
+      routes.step_swapped = "microdrop/mqtt-plugin/step-swapped";
+
       this.routes = routes;
+      this.listen();
+    }
+
+    listen() {
+      this.protocolcontroller.on("update", (data) => {
+        this.sendMessage("microdrop/dmf-device-ui/update-protocol", data);
+      });
+
+      this.protocolcontroller.on("change-step", (step_number) => {
+        this.sendMessage("microdrop/dmf-device-ui/change-step", step_number);
+      });
+
+      this.protocolcontroller.on("delete", (step_number) => {
+        this.sendMessage("microdrop/dmf-device-ui/delete-step", step_number);
+      });
+
+      this.protocolcontroller.on("insert-step", (step_number) => {
+        this.sendMessage("microdrop/dmf-device-ui/insert-step", step_number);
+      });
+
+      this.protocolcontroller.on("change-protocol-state", (step_number) => {
+        this.sendMessage("microdrop/dmf-device-ui/change-protocol-state", step_number);
+      });
     }
 
     onConnect() {
       // MQTT Callback after establishing brocker connection
-      console.log("Connection Established.");
       this.client.subscribe("microdrop/#");
+    }
+
+    sendMessage(topic, msg){
+      const message = new Paho.MQTT.Message(JSON.stringify(msg));
+      message.destinationName = topic;
+      this.client.send(message);
     }
 
     onMessageArrived(msg){
@@ -194,22 +468,19 @@
       const routes = this.routes;
       const protocolcontroller = this.protocolcontroller;
       const uicontroller = this.uicontroller;
-      // console.log(route);console.log(msg);
+      console.log(route);console.log(msg);
 
-      if (route == routes.device_swapped)
-        uicontroller.device_swapped(msg);
-      if (route == routes.dmf_device_ui_plugin_step_options)
-        protocolcontroller.step_options_updated(msg);
-      if (route == routes.droplet_planning_plugin_step_options)
-          protocolcontroller.step_options_updated(msg);
-      if (route == routes.droplet_planning_plugin_schema)
-        protocolcontroller.droplet_planning_plugin_schema(msg);
-      if (route == routes.dmf_device_ui_plugin_schema)
-        protocolcontroller.dmf_device_ui_plugin_schema(msg);
-      if (route == routes.set_electrode_states)
-        uicontroller.set_electrode_states(msg);
-      if (route == routes.routes_set)
-        uicontroller.routes_set(msg);
+      if (route == routes.device_swapped) uicontroller.device_swapped(msg);
+      if (route == routes.dmf_device_ui_plugin_step_options) protocolcontroller.step_options_updated(msg);
+      if (route == routes.dmf_device_ui_plugin_schema) protocolcontroller.dmf_device_ui_plugin_schema(msg);
+      if (route == routes.droplet_planning_plugin_step_options) protocolcontroller.step_options_updated(msg);
+      if (route == routes.droplet_planning_plugin_schema) protocolcontroller.droplet_planning_plugin_schema(msg);
+      if (route == routes.get_channel_states) uicontroller.get_channel_states(msg);
+      if (route == routes.set_electrode_states) uicontroller.set_electrode_states(msg);
+      if (route == routes.routes_set) uicontroller.routes_set(msg);
+      if (route == routes.protocol_state) protocolcontroller.protocol_state(msg);
+      if (route == routes.step_swapped) protocolcontroller.step_swapped(msg);
+
     }
   }
 
