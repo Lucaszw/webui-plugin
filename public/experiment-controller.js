@@ -1,7 +1,6 @@
-class ExperimentController extends MQTTClient {
-  constructor(elem){
-    super("Experiment Controller");
-    this.element  = elem;
+class ExperimentController extends PluginController {
+  constructor(elem, focusTracker){
+    super(elem, focusTracker, "Experiment Controller");
     this.controls = this.Controls();
     this.listen();
   }
@@ -12,24 +11,9 @@ class ExperimentController extends MQTTClient {
     this.addRoute("microdrop/{*}/protocol-swapped", this.onProtocolSwapped.bind(this));
     this.addPostRoute("/save-protocol", "save");
     this.addPostRoute("/change-protocol", "change-protocol");
+    this.addPostRoute("/delete-protocol", "delete-protocol");
     this.on("item-clicked", this.onItemClicked.bind(this));
-  }
-
-  // ** Event Handlers **
-  onGetProtocols(msg) {
-    this.protocols = JSON.parse(msg);
-  }
-
-  onItemClicked(protocol) {
-    this.trigger("change-protocol", protocol);
-  }
-
-  onProtocolSwapped(msg){
-    this.protocol = JSON.parse(msg);
-  }
-
-  onDuplicate(msg){
-    this.trigger("save", this.protocol);
+    this.on("delete", this.onDelete.bind(this));
   }
 
   // ** Getters and Setters **
@@ -39,7 +23,9 @@ class ExperimentController extends MQTTClient {
 
   set protocols(protocols) {
     this._protocols = protocols;
-    this.protocol   = _.last(protocols);
+    if (!this.protocol)
+      this.trigger("change-protocol", _.last(this._protocols));
+    this.list = this.List(this._protocols);
   }
 
   get protocol() {
@@ -79,12 +65,49 @@ class ExperimentController extends MQTTClient {
     return style;
   }
 
+  get time() {
+    return new Date(new Date().getTime()).toLocaleString();
+  }
+
+  // ** Event Handlers **
+  onDelete(){
+    this.trigger("delete-protocol", this.protocol);
+    this.protocol = undefined;
+  }
+
+  onDuplicate(msg){
+    const name = "Protocol: " + this.time;
+    this.trigger("save", name);
+  }
+
+  onGetProtocols(msg) {
+    this.protocols = JSON.parse(msg);
+  }
+
+  onItemClicked(protocol) {
+    this.trigger("change-protocol", protocol);
+  }
+
+  onProtocolSwapped(msg){
+    this.protocol = JSON.parse(msg);
+  }
+
+  onSave(msg){
+    this.trigger("save", this.protocol.name);
+  }
+
   // ** Initializers **
   Controls() {
     const controls   = new Object();
+    controls.savebtn = D("<button type='button'>Save</button>");
     controls.dupbtn = D("<button type='button'>Duplicate</button>");
+
+    controls.savebtn.on("click", this.onSave.bind(this));
     controls.dupbtn.on("click", this.onDuplicate.bind(this));
+
+    this.element.appendChild(controls.savebtn.el);
     this.element.appendChild(controls.dupbtn.el);
+
     return controls;
   }
 
@@ -92,12 +115,14 @@ class ExperimentController extends MQTTClient {
     const item = D("<li><li>");
     let style;
 
+    item.innerText = protocol.name;
+    item.on("click", () => this.trigger("item-clicked", protocol));
+
+    if (!this.protocol) return item;
+
     if (protocol.name == this.protocol.name) style = this.style.li_active;
     if (protocol.name != this.protocol.name) style = this.style.li_inactive;
-
-    item.innerText = protocol.name;
     item.setStyles(style);
-    item.on("click", () => this.trigger("item-clicked", protocol));
     return item;
   }
 

@@ -1,42 +1,40 @@
-class ProtocolController extends MQTTClient {
-  constructor(element) {
-    super("ProtocolController");
-    this.canDelete = false;
-    this.element = element;
-    this.controls = this.initControls();
+class ProtocolController extends PluginController {
+  constructor(elem, focusTracker) {
+    super(elem, focusTracker, "ProtocolController");
+    this.controls = this.Controls();
     this.data = new Array();
     this.schemas = new Object();
     this.table = null;
-
     this.listen();
   }
 
   // ** Listeners **
   listen() {
-    this.addRoute("{*}/dmf-device-ui-plugin/schema", this.dmf_device_ui_plugin_schema.bind(this));
+    // Getters:
+    this.addRoute("{*}/dmf-device-ui-plugin/schema", this.onDmfDeviceUISchemaUpdated.bind(this));
     this.addRoute("{*}/{*}/step-options", this.onStepOptionsUpdated.bind(this));
-    this.addRoute("{*}/droplet-planning-plugin/schema", this.droplet_planning_plugin_schema.bind(this));
+    this.addRoute("{*}/droplet-planning-plugin/schema", this.onDropletPlanningSchemaUpdated.bind(this));
     this.addRoute("{*}/{*}/step-options", this.onStepOptionsUpdated.bind(this));
-    this.addRoute("{*}/mqtt-plugin/protocol-state", this.protocol_state.bind(this));
-    this.addRoute("{*}/mqtt-plugin/protocol-repeats-changed", this.repeats_changed.bind(this));
+    this.addRoute("{*}/mqtt-plugin/protocol-state", this.onProtocolStateChanged.bind(this));
+    this.addRoute("{*}/mqtt-plugin/protocol-repeats-changed", this.onRepeatsChanged.bind(this));
     this.addRoute("{*}/mqtt-plugin/protocol-changed", this.onProtocolChanged.bind(this));
     this.addRoute("{*}/mqtt-plugin/protocol-swapped", this.onProtocolSwapped.bind(this));
-    this.addRoute("{*}/mqtt-plugin/step-swapped", this.step_swapped.bind(this));
+    this.addRoute("{*}/mqtt-plugin/step-swapped", this.onStepSwapped.bind(this));
 
+    // Setters:
     this.addPostRoute("/update-protocol", "update");
     this.addPostRoute("/change-step", "change-step");
-    this.addPostRoute("/delete-step", "delete");
+    this.addPostRoute("/delete-step", "delete-step");
     this.addPostRoute("/insert-step", "insert-step");
     this.addPostRoute("/change-protocol-state", "change-protocol-state");
     this.addPostRoute("/change-repeat", "change-repeat");
-
 
     // Local Updates
     this.on("mousedown", this.onMousedown.bind(this));
     this.on("prev-step-clicked", this.onPrevStepClicked.bind(this));
     this.on("next-step-clicked", this.onNextStepClicked.bind(this));
     this.on("play-clicked", this.onPlayClicked.bind(this));
-    Key("delete", this.onDelete.bind(this));
+    this.on("delete", this.onDelete.bind(this));
     D(this.element).on("mouseout", this.onMouseout.bind(this));
   }
 
@@ -46,16 +44,11 @@ class ProtocolController extends MQTTClient {
   }
 
   onDelete(e) {
-    // XXX: Currently using variable to ensure mouse is inside table before
-    //      should use a element target with delete event (but wasnt working)
-    if (this.canDelete == false) return;
-    this.canDelete = false;
-    this.trigger("delete", this.step);
+    this.trigger("delete-step", this.step);
   }
 
   onMouseout(e) {
     if (e.target != this.element) return;
-    this.canDelete = false;
   }
 
   onMousedown(msg) {
@@ -68,7 +61,6 @@ class ProtocolController extends MQTTClient {
     const step = this.table.row(msg.target)[0][0];
     if (step != this.step){
       this.onChangeStep(step);
-      this.canDelete = true;
       return;
     }
 
@@ -125,33 +117,30 @@ class ProtocolController extends MQTTClient {
     this.updateSteps(step_options);
   }
 
-  updateSteps(step_options){
-    const step_count = step_options.length;
-    const data_count = this.data.length;
+  onStepSwapped(payload){
+    const step = JSON.parse(payload);
+    this.step = step;
+  }
 
-    // If rows have been removed, remove them from data:
-    if (data_count - step_count > 0){
-      this.data = _.slice(this.data, 0,step_count);
-      _.each(_.range(step_count,data_count), () => {
-        this.table.row().remove();
-      });
-    }
+  onRepeatsChanged(payload) {
+    const val = JSON.parse(payload);
+    this.repeats = val;
+  }
 
-    // Update data with modified schema values
-    _.each(step_options, (step,i) => {
-      if (!this.data[i]) this.data[i] = new Object();
+  onProtocolStateChanged(payload){
+    const state = JSON.parse(payload);
+    if (state == "running") this.controls.playbtn.innerText = "Pause";
+    if (state == "paused")  this.controls.playbtn.innerText = "Play";
+  }
 
-      const options = _.assign.apply(_, _.values(step));
-      _.each(options, (v,k) => this.data[i][k] = v);
-      console.log("OPTIONS::");console.log(options);
-      const data = _.extend({step: i}, this.data[i]);
-      console.log("DATA::"); console.log(data);
-      this.data[i] = data;
-    });
+  onDropletPlanningSchemaUpdated(payload) {
+    const schema = JSON.parse(payload);
+    this.addSchema("droplet_planning_plugin", schema);
+  }
 
-    console.log(this.data);
-    // Update step with new step options
-    this.updateTable();
+  onDmfDeviceUISchemaUpdated(payload) {
+    const schema = JSON.parse(payload);
+    this.addSchema("dmf_device_ui_plugin", schema);
   }
 
   // ** Methods **
@@ -209,7 +198,7 @@ class ProtocolController extends MQTTClient {
 
   addSchema(key,data){
     this.schemas[key] = data;
-    this.table = this.initTable();
+    this.table = this.Table();
   }
 
   addStep() {
@@ -226,7 +215,7 @@ class ProtocolController extends MQTTClient {
     return {title: k, data: k};
   }
 
-  // ** Getters **
+  // ** Getters and Setters **
   get styles() {
     const styles = new Object();
     styles.unselected = {background: "white", color: "black"};
@@ -241,6 +230,20 @@ class ProtocolController extends MQTTClient {
     });
     if (row[0])  return this.table.row(row)[0][0];
     if (!row[0]) return null;
+  }
+
+  set step(number) {
+    const table_d = D(this.table.table().node());
+    const rows    = D('tr', table_d);
+    // If row undefined then add step
+    if (this.table.row(number).node() == null) {
+      console.warn("Attempted to set step beyond table size, creating new step");
+      this.addStep();
+    }
+    // Change selected step
+    const row_d  = D(this.table.row(number).node());
+    rows.forEach((i)=> D(i).setStyles(this.styles.unselected));
+    row_d.setStyles(this.styles.selected);
   }
 
   get columns() {
@@ -264,57 +267,35 @@ class ProtocolController extends MQTTClient {
     return schema;
   }
 
-  // ** Setters **
   set repeats(val) {
     const field = this.controls.repeatField;
     field.setAttribute("value", val);
   }
 
-  set step(number) {
-    const table_d = D(this.table.table().node());
-    const rows    = D('tr', table_d);
-    // If row undefined then add step
-    if (this.table.row(number).node() == null) {
-      console.warn("Attempted to set step beyond table size, creating new step");
-      this.addStep();
+  // ** Updaters **
+  updateSteps(step_options){
+    const step_count = step_options.length;
+    const data_count = this.data.length;
+
+    // If rows have been removed, remove them from data:
+    if (data_count - step_count > 0){
+      this.data = _.slice(this.data, 0,step_count);
+      _.each(_.range(step_count,data_count), () => {
+        this.table.row().remove();
+      });
     }
-    // Change selected step
-    const row_d  = D(this.table.row(number).node());
-    rows.forEach((i)=> D(i).setStyles(this.styles.unselected));
-    row_d.setStyles(this.styles.selected);
-  }
 
-  // ** Actions (See MQTTController) **
-  step_swapped(payload){
-    const step = JSON.parse(payload);
-    this.step = step;
-    this.canDelete = true;
-  }
+    // Update data with modified schema values
+    _.each(step_options, (step,i) => {
+      if (!this.data[i]) this.data[i] = new Object();
+      const options = _.assign.apply(_, _.values(step));
+      _.each(options, (v,k) => this.data[i][k] = v);
+      const data = _.extend({step: i}, this.data[i]);
+      this.data[i] = data;
+    });
 
-  repeats_changed(payload) {
-    const val = JSON.parse(payload);
-    this.repeats = val;
-  }
-
-  protocol_state(payload){
-    const state = JSON.parse(payload);
-    if (state == "running") this.controls.playbtn.innerText = "Pause";
-    if (state == "paused")  this.controls.playbtn.innerText = "Play";
-  }
-
-  droplet_planning_plugin_schema(payload) {
-    const schema = JSON.parse(payload);
-    this.addSchema("droplet_planning_plugin", schema);
-  }
-
-  dmf_device_ui_plugin_schema(payload) {
-    const schema = JSON.parse(payload);
-    this.addSchema("dmf_device_ui_plugin", schema);
-  }
-
-  // ** Initializers and Updaters **
-  updateTable() {
-    _.each(this.data, this.updateRow.bind(this));
+    // Update step with new step options
+    this.updateTable();
   }
 
   updateRow(step_options, step_number){
@@ -332,7 +313,12 @@ class ProtocolController extends MQTTClient {
     this.table.row(step_number).data(data).draw();
   }
 
-  initControls() {
+  updateTable() {
+    _.each(this.data, this.updateRow.bind(this));
+  }
+
+  // ** Initializers **
+  Controls() {
     const controls = new Object();
 
     controls.leftbtn  = D("<button type='button'>Prev</button>");
@@ -356,7 +342,7 @@ class ProtocolController extends MQTTClient {
     return controls;
   }
 
-  initTable() {
+  Table() {
     let columns;
 
     // remove, and recreate table
