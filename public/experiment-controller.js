@@ -7,13 +7,41 @@ class ExperimentController extends PluginController {
 
   // ** Event Listeners **
   listen() {
+    // State Routes (Ties to Data Controllers used by plugin):
+    this.addRoute("microdrop/put/experiment-controller/state/protocol", this.onProtocolUpdated.bind(this));
+
     this.addRoute("microdrop/{*}/protocols", this.onGetProtocols.bind(this));
-    this.addRoute("microdrop/{*}/protocol-swapped", this.onProtocolSwapped.bind(this));
+    this.addRoute("microdrop/{*}/send-protocol", this.onReceivedProtocol.bind(this));
+
     this.addPostRoute("/save-protocol", "save");
     this.addPostRoute("/change-protocol", "change-protocol");
     this.addPostRoute("/delete-protocol", "delete-protocol");
+    this.addPostRoute("/request-protocol-export", "request-protocol-export");
+    this.addPostRoute("/upload-protocol", "upload-protocol");
+
     this.on("item-clicked", this.onItemClicked.bind(this));
     this.on("delete", this.onDelete.bind(this));
+  }
+
+  download(str) {
+    const anchor = D('<a style="display:none"></a>');
+    const data = "data:text/json;charset=utf-8," + encodeURIComponent(str);
+    anchor.setAttribute("href", data);
+    anchor.setAttribute("download", "protocol.json");
+    anchor.click();
+  }
+
+  readFile(input) {
+    const file   = input.el.files[0];
+    const reader = new FileReader();
+    reader.onload = this.onFileUploaded.bind(this);
+    reader.readAsText(file);
+  }
+
+  upload() {
+    const input = D('<input type="file" name="name" style="display: none;" />');
+    input.on("change", () => this.readFile(input));
+    input.click();
   }
 
   // ** Getters and Setters **
@@ -80,6 +108,22 @@ class ExperimentController extends PluginController {
     this.trigger("save", name);
   }
 
+  onExport(msg) {
+    this.trigger("request-protocol-export", null);
+  }
+
+  onImport(msg) {
+    this.upload();
+  }
+
+  onFileUploaded(msg) {
+    const protocol = JSON.parse(msg.target.result);
+    protocol.name = "Protocol: " + this.time;
+    console.log("protocol:");
+    console.log(protocol);
+    this.trigger("upload-protocol", protocol);
+  }
+
   onGetProtocols(msg) {
     this.protocols = JSON.parse(msg);
   }
@@ -88,8 +132,13 @@ class ExperimentController extends PluginController {
     this.trigger("change-protocol", protocol);
   }
 
-  onProtocolSwapped(msg){
+  onProtocolUpdated(msg){
     this.protocol = JSON.parse(msg);
+  }
+
+  onReceivedProtocol(msg) {
+    const str = msg;
+    this.download(str);
   }
 
   onSave(msg){
@@ -101,13 +150,18 @@ class ExperimentController extends PluginController {
     const controls   = new Object();
     controls.savebtn = D("<button type='button'>Save</button>");
     controls.dupbtn = D("<button type='button'>Duplicate</button>");
+    controls.exportbtn = D("<button type='button'>Export</button>");
+    controls.importbtn = D("<button type='button'>Import</button>");
 
     controls.savebtn.on("click", this.onSave.bind(this));
     controls.dupbtn.on("click", this.onDuplicate.bind(this));
+    controls.exportbtn.on("click", this.onExport.bind(this));
+    controls.importbtn.on("click", this.onImport.bind(this));
 
     this.element.appendChild(controls.savebtn.el);
     this.element.appendChild(controls.dupbtn.el);
-
+    this.element.appendChild(controls.exportbtn.el);
+    this.element.appendChild(controls.importbtn.el);
     return controls;
   }
 

@@ -10,20 +10,19 @@ class ProtocolController extends PluginController {
 
   // ** Listeners **
   listen() {
+    // State Routes (Ties to Data Controllers used by plugin):
+    this.addRoute("microdrop/put/protocol-controller/state/steps", this.onStepsUpdated.bind(this));
+    this.addRoute("microdrop/put/protocol-controller/state/step-number", this.onStepNumberUpdated.bind(this));
+
     // Getters:
     this.addRoute("{*}/dmf-device-ui-plugin/schema", this.onDmfDeviceUISchemaUpdated.bind(this));
-    this.addRoute("{*}/{*}/step-options", this.onStepOptionsUpdated.bind(this));
     this.addRoute("{*}/droplet-planning-plugin/schema", this.onDropletPlanningSchemaUpdated.bind(this));
-    this.addRoute("{*}/{*}/step-options", this.onStepOptionsUpdated.bind(this));
     this.addRoute("{*}/mqtt-plugin/protocol-state", this.onProtocolStateChanged.bind(this));
     this.addRoute("{*}/mqtt-plugin/protocol-repeats-changed", this.onRepeatsChanged.bind(this));
-    this.addRoute("{*}/mqtt-plugin/protocol-changed", this.onProtocolChanged.bind(this));
-    this.addRoute("{*}/mqtt-plugin/protocol-swapped", this.onProtocolSwapped.bind(this));
-    this.addRoute("{*}/mqtt-plugin/step-swapped", this.onStepSwapped.bind(this));
 
     // Setters:
-    this.addPostRoute("/update-protocol", "update");
-    this.addPostRoute("/change-step", "change-step");
+    this.addPostRoute("/update-step", "update");
+    this.addPostRoute("/update-step-number", "update-step-number");
     this.addPostRoute("/delete-step", "delete-step");
     this.addPostRoute("/insert-step", "insert-step");
     this.addPostRoute("/change-protocol-state", "change-protocol-state");
@@ -39,8 +38,8 @@ class ProtocolController extends PluginController {
   }
 
   // ** Event Handlers (Between action and trigger) **
-  onChangeStep(number) {
-    this.trigger("change-step", number);
+  onChangeStepNumber(number) {
+    this.trigger("update-step-number", number);
   }
 
   onDelete(e) {
@@ -60,7 +59,7 @@ class ProtocolController extends PluginController {
     // If step not selected, change step and exit
     const step = this.table.row(msg.target)[0][0];
     if (step != this.step){
-      this.onChangeStep(step);
+      this.onChangeStepNumber(step);
       return;
     }
 
@@ -73,7 +72,7 @@ class ProtocolController extends PluginController {
   onNextStepClicked(e) {
     const lastStep = this.data.length - 1;
     if (this.step == lastStep) this.trigger("insert-step", lastStep);
-    if (this.step != lastStep) this.trigger("change-step", this.step+1);
+    if (this.step != lastStep) this.trigger("update-step-number", this.step+1);
   }
 
   onPlayClicked(e) {
@@ -84,7 +83,7 @@ class ProtocolController extends PluginController {
     let prevStep;
     if (this.step == 0) prevStep = this.data.length -1;
     if (this.step != 0) prevStep = this.step-1;
-    this.trigger("change-step", prevStep);
+    this.trigger("update-step-number", prevStep);
   }
 
   onRepeatChanged(msg) {
@@ -92,34 +91,26 @@ class ProtocolController extends PluginController {
     this.trigger("change-repeat", val);
   }
 
-  onUpdate(key,val,step) {
-    // TODO: keep original datatype after modification
-    const data = _.cloneDeep(this.data);
-    data[step][key] = val;
-    this.trigger("update", data);
+  onUpdate(key,val,stepNumber) {
+    // const data = _.cloneDeep(this.data);
+    // data[step][key] = val;
+    this.trigger("update", {stepNumber: stepNumber, key: key, val: val});
   }
 
-  onProtocolSwapped(payload) {
-    const protocol = JSON.parse(payload);
-    const step_options = protocol.steps;
-    this.updateSteps(step_options);
-  }
   onProtocolChanged(payload) {
+    console.log("Protocol Changed!!");
     const protocol = JSON.parse(payload);
     const step_options = protocol.steps;
     this.updateSteps(step_options);
   }
 
-  onStepOptionsUpdated(payload){
-    console.log("STEP OPTIONS UPDATED!");
-    const step_options = JSON.parse(payload);
-    console.log(step_options);
-    this.updateSteps(step_options);
+  onStepNumberUpdated(payload) {
+    this.step = payload;
   }
 
-  onStepSwapped(payload){
-    const step = JSON.parse(payload);
-    this.step = step;
+  onStepsUpdated(payload) {
+    const steps = JSON.parse(payload);
+    this.updateSteps(steps);
   }
 
   onRepeatsChanged(payload) {
@@ -218,8 +209,8 @@ class ProtocolController extends PluginController {
   // ** Getters and Setters **
   get styles() {
     const styles = new Object();
-    styles.unselected = {background: "white", color: "black"};
-    styles.selected   = {background: "#22509b", color: "white"};
+    styles.unselected = {background: "white", color: "black", width: "auto"};
+    styles.selected   = {background: "#22509b", color: "white", width: "auto"};
     styles.label = {"font-size": "13px", "margin": "0px 5px"};
     return styles;
   }
@@ -328,8 +319,8 @@ class ProtocolController extends PluginController {
     controls.repeatField = D("<input type='number' id='repeatCount' min='1' value='1' />");
     controls.repeatLabel.setStyles(this.styles.label);
 
-    controls.leftbtn.on("click",  event => this.trigger("prev-step-clicked",event));
-    controls.playbtn.on("click",  event => this.trigger("play-clicked",event));
+    controls.leftbtn.on("click", event => this.trigger("prev-step-clicked",event));
+    controls.playbtn.on("click", event => this.trigger("play-clicked",event));
     controls.rightbtn.on("click", event => this.trigger("next-step-clicked",event));
     controls.repeatField.on("blur", event => this.onRepeatChanged(event));
 
@@ -360,8 +351,8 @@ class ProtocolController extends PluginController {
 
     // Display options for datatable:
     const options = new Object();
-    options.info = false;
     options.columns = this.headers;
+    options.info = false;
     options.ordering = false;
     options.searching = false;
     options.paginate = false;

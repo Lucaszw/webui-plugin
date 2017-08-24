@@ -33,7 +33,7 @@ class MQTTClient {
   }
 
   onMessageArrived(msg) {
-    console.log(this.name + " : " + msg.destinationName);
+    // console.log(this.name + " : " + msg.destinationName);
     this.parse(msg.destinationName, [msg.payloadString]);
   }
 
