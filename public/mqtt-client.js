@@ -11,8 +11,7 @@ class MQTTClient {
   addPostRoute(topic, event, retain=false, qos=0, dup=false){
     // TODO: Have different front end clients post to different channels
     // const channel = "microdrop/"+this.name;
-    const channel = "microdrop/dmf-device-ui";
-    this.on(event, (d) => this.sendMessage(channel+topic, d, retain, qos, dup));
+    this.on(event, (d) => this.sendMessage(this.channel+topic, d, retain, qos, dup));
   }
 
   sendMessage(topic, payload, retain=false, qos=0, dup=false){
@@ -25,6 +24,10 @@ class MQTTClient {
     return this.constructor.name;
   }
 
+  get channel() {
+    return  "microdrop/dmf-device-ui";
+  }
+  
   // ** Event Handlers **
   onConnect() {
     // MQTT Callback after establishing brocker connection

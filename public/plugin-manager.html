@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0-beta/css/bootstrap.min.css" integrity="sha384-/Y6pD6FV/Vv2HJnA6t+vslU6fwYXjCFtcEpHbNJ0lyAFsXTsjBbfaDjzALeQsN6M" crossorigin="anonymous">
+  <link href="//cdnjs.cloudflare.com/ajax/libs/datatables/1.10.15/css/jquery.dataTables.min.css" rel="stylesheet" />
+  <link rel="stylesheet" type="text/css" media="screen" href="property-table.css" />
+  <link rel="stylesheet" type="text/css" media="screen" href="phosphor-menus.css" />
+  <link rel="stylesheet" type="text/css" media="screen" href="formatPlane.css" />
+  <link rel="stylesheet" type="text/css" media="screen" href="index.css" />
+  <script type="text/javascript" src="two.min.js"></script>
+  <script type="text/javascript" src="libDeviceUIPlugin.js"></script>
+  <script src="//cdnjs.cloudflare.com/ajax/libs/datatables/1.10.15/js/jquery.dataTables.min.js"></script>
+  <script src="//cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js" type="text/javascript"></script>
+  <script src="//cdnjs.cloudflare.com/ajax/libs/js-signals/1.0.0/js-signals.min.js" type="text/javascript"></script>
+  <script src="//cdnjs.cloudflare.com/ajax/libs/crossroads/0.12.2/crossroads.min.js" type="text/javascript"></script>
+  <script type="text/javascript" src="main.js"></script>
+  <script type="text/javascript" src="mqtt-client.js"></script>
+  <script type="text/javascript" src="plugin-controller.js"></script>
+</head>
+
+<body>
+
+  <script>
+  let focusTracker, panel, widgets;
+
+  class PluginManager extends PluginController {
+    constructor(elem, focusTracker) {
+      super(elem, focusTracker, "PluginManager");
+      this.listen();
+      this.plugins = new Object();
+      this.pluginPathField = this.PluginPathField();
+    }
+
+    get channel() {return "microdrop/plugin-manager"}
+    get list() {return this._list;}
+    set list(list) {
+      if (list == undefined) this.element.removeChild(this._list.el);
+      if (list != undefined) this.element.appendChild(list.el);
+      this._list = list;
+    }
+    get pluginPathField() {
+      return this._pluginPathField;
+    }
+    set pluginPathField(pluginPathField) {
+      this._pluginPathField = pluginPathField;
+    }
+    get styles() {
+      const styles = new Object();
+      styles.list = {"list-style": "none", margin: 0, padding: 0};
+      styles.card = {width: "250px", "min-height": "200px", float: "left",
+                     margin: "5px", padding: "5px", "text-align": "center"};
+      styles.cardRunning = {background: "#ddfddd"};
+      styles.cardStopped = {background: "#ffe5e5"};
+      styles.cardTextInput = {"font-size": "15px"};
+      styles.cardButton = {width: "60px", margin: "5px 3px"};
+      styles.cardBadge = {padding: "5px", width: "80px", margin: "0 auto"};
+      return styles;
+    }
+
+    listen() {
+      this.addPostRoute("/launch-plugin", "launch-plugin", false);
+      this.addPostRoute("/close-plugin", "close-plugin", false);
+      this.addRoute("microdrop/broker/running-plugins", this.onRunningPluginsUpdated.bind(this));
+      this.on("add-plugin", this.onAddPlugin.bind(this));
+      this.on("disconnect-plugin", this.onDisconnectPlugin.bind(this));
+      this.on("plugin-action", this.onCardAction.bind(this));
+    }
+
+    onAddPlugin(msg) {
+      // Get path from text field:
+      const path = this.pluginPathField.value;
+      this.trigger("launch-plugin", path);
+    }
+
+    onCardAction(msg) {
+      const plugin = msg.plugin;
+      const element = msg.element;
+      element.setStyles({opacity: 0.5});
+      if (msg.action == "load") this.trigger("launch-plugin", plugin.dir);
+      if (msg.action == "stop") this.trigger("close-plugin", plugin.name);
+    }
+
+    onDisconnectPlugin(plugin) {
+      const state = plugin.state;
+      if (state == "running") this.trigger("close-plugin",  plugin.name);
+      if (state == "stopped") this.trigger("launch-plugin", plugin.dir);
+    }
+
+    onRunningPluginsUpdated(payload){
+      const runningPlugins = JSON.parse(payload);
+      this.list = this.RunningPluginsContainer(runningPlugins);
+    }
+
+    setPluginToStopped(plugin) {
+      plugin.state = "stopped";
+      // plugin.listItem.setStyles({color: "red"});
+    }
+
+    Plugin(dir, name) {
+      const plugin = new Object();
+      plugin.state = "running";
+      plugin.name  = name;
+      plugin.dir   = dir;
+      plugin.listItem = D("<li>"+name+" : " + dir +"</li>");
+      plugin.listItem.setStyles({color: "green"});
+      plugin.listItem.on("click", ()=> this.trigger("disconnect-plugin",plugin));
+      this.plugins[name] = plugin;
+      return plugin;
+    }
+
+    PluginPathField() {
+      const controls = D("<div></div>");
+      const pluginPathsTextField = D('<input type="text" value="" >');
+      const addBtn = D("<button>Add Plugin Path </button>");
+      addBtn.on("click", (e) => this.trigger("add-plugin", e));
+      controls.appendChild(pluginPathsTextField.el);
+      controls.appendChild(addBtn.el);
+      this.element.appendChild(controls.el);
+      return pluginPathsTextField;
+    }
+
+    Card(plugin, pluginName) {
+      // Init Card (Item):
+      const item = D("<div class='card'></div>");
+      item.setStyles(this.styles.card);
+
+      // Title:
+      const title = D("<b class='card-title'></b>");
+      title.innerHTML = pluginName;
+      item.appendChild(title.el);
+
+      // Location Input Text Field:
+      const loc = new Object();
+      loc.label = D("<label class='form-control-label'>Plugin Location:</label>");
+      loc.input = D("<input class='form-control form-control-sm' type='text' />");
+      loc.input.value = plugin.dir;
+      _.each(loc, (i) => {
+        i.setStyles(this.styles.cardTextInput);
+        item.appendChild(i.el);
+      });
+
+      // Buttons:
+      const buttonGroup = D("<div></div>");
+      const buttons = new Object();
+      buttons.load = D("<button class='btn btn-primary btn-sm'>Load</button");
+      buttons.stop = D("<button class='btn btn-secondary btn-sm'>Stop</button");
+      _.each(buttons, (b, action) => {
+        const msg = new Object();
+        msg.action = action;
+        msg.plugin = plugin;
+        msg.element = item;
+        b.setStyles(this.styles.cardButton);
+        b.on("click", () => this.trigger("plugin-action", msg));
+        buttonGroup.appendChild(b.el);
+      });
+      if (plugin.state == "running") buttons.load.addClasses("disabled");
+      if (plugin.state == "stopped") buttons.stop.addClasses("disabled");
+      item.appendChild(buttonGroup.el);
+
+      // Badge:
+      const statusBadge = new Object();
+      statusBadge.running = D("<span class='badge badge-success'>Running</span>");
+      statusBadge.stopped = D("<span class='badge badge-danger'>Stopped</span>");
+      _.each(statusBadge, (b) => b.setStyles(this.styles.cardBadge));
+      if (plugin.state == "running") item.appendChild(statusBadge.running.el);
+      if (plugin.state == "stopped") item.appendChild(statusBadge.stopped.el);
+
+      return item;
+    }
+
+    RunningPluginsContainer(runningPlugins) {
+      if (this.list) this.list = undefined;
+      const list = D("<div></div>");
+      list.appendChild(D("<b>Plugins:</b>").el);
+
+      // Set all plugins to stopped state
+
+      _.each(this.plugins, (plugin) => plugin.state = "stopped");
+
+      // Set state of running plugins to running state
+      _.each(runningPlugins, (dir, name) => {
+        this.plugins[name] = new Object();
+        const plugin = this.plugins[name];
+        plugin.dir = dir.toString();
+        plugin.name = name;
+        plugin.state = "running";
+      });
+
+      console.log(this.plugins);
+
+      const container = D("<div></div>");
+      _.each(this.plugins, (v,k) => container.appendChild(this.Card(v,k).el));
+      list.appendChild(container.el);
+
+      return list;
+    }
+
+    RunningPluginsList(runningPlugins) {
+      const list = D("<ul></ul>");
+      list.setStyles(this.styles.list);
+      list.appendChild(D("<b>Plugins:</b>").el);
+
+      // Delete previous list,
+      // Set all previous plugins to stopped state,
+      // Set running plugins to running state
+      if (this.list) this.list = undefined;
+      _.each(this.plugins, this.setPluginToStopped.bind(this));
+      _.each(runningPlugins, this.Plugin.bind(this));
+
+      // Add list items to dom
+      const listItems = _.map(this.plugins, (v) => {return v.listItem});
+      _.each(listItems, (item) => list.appendChild(item.el));
+      this.element.appendChild(list.el);
+      return list;
+    }
+  };
+
+  const load = () => {
+    widgets = new Object();
+    widgets.manager = new PhosphorWidget.Widget();
+    widgets.manager.title.text = "Manager settings";
+
+    focusTracker = new FocusTracker();
+
+    panel = new DockPanel();
+    panel.id = 'main';
+    panel.insertLeft(widgets.manager);
+    panel.attach(document.body);
+
+    window.pluginManager = new PluginManager(widgets.manager.node, focusTracker);
+
+  };
+  $(window).on("load", load);
+  </script>
+</body>
+
+<html>

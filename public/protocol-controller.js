@@ -25,7 +25,7 @@ class ProtocolController extends PluginController {
     this.addPostRoute("/update-step-number", "update-step-number");
     this.addPostRoute("/delete-step", "delete-step");
     this.addPostRoute("/insert-step", "insert-step");
-    this.addPostRoute("/change-protocol-state", "change-protocol-state");
+    this.addPostRoute("/update-protocol-running-state", "update-protocol-running-state");
     this.addPostRoute("/change-repeat", "change-repeat");
 
     // Local Updates
@@ -76,7 +76,7 @@ class ProtocolController extends PluginController {
   }
 
   onPlayClicked(e) {
-    this.trigger("change-protocol-state", this.step);
+    this.trigger("update-protocol-running-state", this.step);
   }
 
   onPrevStepClicked(e) {
