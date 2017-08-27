@@ -6,9 +6,8 @@ class UIController extends MQTTClient {
 
   listen() {
     this.addRoute("microdrop/device-info-plugin/device-swapped", this.device_swapped.bind(this));
-    // this.addRoute("microdrop/droplet-planning-plugin/routes-set", this.routes_set.bind(this));
-    this.addRoute("microdrop/electrode-controller-plugin/set-electrode-states", this.set_electrode_states.bind(this));
     this.addRoute("microdrop/electrode-controller-plugin/get-channel-states", this.get_channel_states.bind(this));
+    this.addRoute("microdrop/put/dmf-device-ui/state/electrodes", this.onElectrodeStatesSet.bind(this));
     this.addRoute("microdrop/put/dmf-device-ui/state/routes", this.onUpdateRoutes.bind(this));
   }
 
@@ -21,14 +20,10 @@ class UIController extends MQTTClient {
     window.device = device;
   }
 
-  set_electrode_states(payload) {
-    let data, electrode_states;
-    data = JSON.parse(payload);
-    this.electrode_states = extractElectrodeStates(data);
-    device_ui_plugin.applyElectrodeStates(this.electrode_states);
-  }
-
   get_channel_states(payload) {
+    console.log("GETTING CHANNEL STATES!!!");
+    console.log(JSON.parse(payload));
+    
     // TODO: implement channel_states, and actuated_area
     let data, electrode_states, channel_states, actuated_area;
     data = JSON.parse(payload);
@@ -36,6 +31,15 @@ class UIController extends MQTTClient {
     _.each(this.electrode_states, (v,k) => {this.electrode_states[k] = false});
 
     this.electrode_states = _.extend(this.electrode_states, electrode_states);
+    device_ui_plugin.applyElectrodeStates(this.electrode_states);
+  }
+
+  onElectrodeStatesSet(payload) {
+    let data, electrode_states;
+    data = JSON.parse(payload);
+    // XXX: Should be more consistent between having electrode_states key or not
+    //      in mqtt messaging
+    this.electrode_states = extractElectrodeStates({electrode_states: data});
     device_ui_plugin.applyElectrodeStates(this.electrode_states);
   }
 
