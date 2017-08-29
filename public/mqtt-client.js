@@ -1,11 +1,27 @@
+const IsJsonString = (str) => {
+  try { JSON.parse(str);} catch (e) {return false;}
+  return true;
+}
+
+String.prototype.replaceAll = function(str1, str2, ignore){
+  return this.replace(new RegExp(str1.replace(/([\/\,\!\\\^\$\{\}\[\]\(\)\.\*\+\?\|\<\>\-\&])/g,"\\$&"),(ignore?"gi":"g")),(typeof(str2)=="string")?str2.replace(/\$/g,"$$$$"):str2);
+}
+
 class MQTTClient {
   constructor(name="web-ui") {
     _.extend(this, Backbone.Events);
     _.extend(this, crossroads.create());
 
     this.client = this.Client();
+    this.subscriptions = new Array();
+
     // XXX: ignoreState variable used internally by crossroads
     this.ignoreState = true;
+  }
+
+  addGetRoute(topic, method) {
+    this.subscriptions.push(topic.replaceAll("{*}", "#"));
+    this.addRoute(topic, method);
   }
 
   addPostRoute(topic, event, retain=false, qos=0, dup=false){
@@ -27,17 +43,20 @@ class MQTTClient {
   get channel() {
     return  "microdrop/dmf-device-ui";
   }
-  
+
   // ** Event Handlers **
   onConnect() {
     // MQTT Callback after establishing brocker connection
-    this.client.subscribe("microdrop/#");
-    console.log("Subscribed to client...");
+    _.each(this.subscriptions, (str) => {this.client.subscribe(str)});
   }
 
   onMessageArrived(msg) {
-    // console.log(this.name + " : " + msg.destinationName);
-    this.parse(msg.destinationName, [msg.payloadString]);
+    const receiver = this.name + " : " + msg.destinationName;
+    const payloadIsValid = IsJsonString(msg.payloadString);
+
+    // console.log(receiver);
+    if (payloadIsValid)  this.parse(msg.destinationName, [msg.payloadString]);
+    if (!payloadIsValid) console.error("Could not parse message for " + receiver);
   }
 
   // ** Initializers **

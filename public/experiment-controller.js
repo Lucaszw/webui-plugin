@@ -8,10 +8,10 @@ class ExperimentController extends PluginController {
   // ** Event Listeners **
   listen() {
     // State Routes (Ties to Data Controllers used by plugin):
-    this.addRoute("microdrop/put/experiment-controller/state/protocol", this.onProtocolUpdated.bind(this));
+    this.addGetRoute("microdrop/put/experiment-controller/state/protocol", this.onProtocolUpdated.bind(this));
 
-    this.addRoute("microdrop/{*}/protocols", this.onGetProtocols.bind(this));
-    this.addRoute("microdrop/{*}/send-protocol", this.onReceivedProtocol.bind(this));
+    this.addGetRoute("microdrop/data-controller/protocols", this.onGetProtocols.bind(this));
+    this.addGetRoute("microdrop/data-controller/send-protocol", this.onReceivedProtocol.bind(this));
 
     this.addPostRoute("/save-protocol", "save");
     this.addPostRoute("/change-protocol", "change-protocol");
@@ -52,7 +52,7 @@ class ExperimentController extends PluginController {
   set protocols(protocols) {
     this._protocols = protocols;
     if (!this.protocol)
-      this.trigger("change-protocol", _.last(this._protocols));
+      this.trigger("change-protocol", _.last(this._protocols.name));
     this.list = this.List(this._protocols);
   }
 
@@ -62,6 +62,10 @@ class ExperimentController extends PluginController {
 
   set protocol(protocol) {
     this._protocol = protocol;
+    if (!this.protocols) {
+      console.error("Tried setting protocol, but protocols was undefined");
+      return;
+    }
     this.list = this.List(this.protocols);
   }
 
@@ -102,45 +106,34 @@ class ExperimentController extends PluginController {
     this.trigger("delete-protocol", this.protocol);
     this.protocol = undefined;
   }
-
   onDuplicate(msg){
     const name = "Protocol: " + this.time;
     this.trigger("save", name);
   }
-
   onExport(msg) {
     this.trigger("request-protocol-export", null);
   }
-
   onImport(msg) {
     this.upload();
   }
-
   onFileUploaded(msg) {
     const protocol = JSON.parse(msg.target.result);
     protocol.name = "Protocol: " + this.time;
-    console.log("protocol:");
-    console.log(protocol);
     this.trigger("upload-protocol", protocol);
   }
-
   onGetProtocols(msg) {
     this.protocols = JSON.parse(msg);
   }
-
   onItemClicked(protocol) {
-    this.trigger("change-protocol", protocol);
+    this.trigger("change-protocol", protocol.name);
   }
-
   onProtocolUpdated(msg){
     this.protocol = JSON.parse(msg);
   }
-
   onReceivedProtocol(msg) {
     const str = msg;
     this.download(str);
   }
-
   onSave(msg){
     this.trigger("save", this.protocol.name);
   }
@@ -153,6 +146,7 @@ class ExperimentController extends PluginController {
     controls.exportbtn = D("<button type='button'>Export</button>");
     controls.importbtn = D("<button type='button'>Import</button>");
 
+    // TODO: Should trigger events vs directly calling them
     controls.savebtn.on("click", this.onSave.bind(this));
     controls.dupbtn.on("click", this.onDuplicate.bind(this));
     controls.exportbtn.on("click", this.onExport.bind(this));

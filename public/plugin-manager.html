@@ -33,6 +33,15 @@
       this.pluginPathField = this.PluginPathField();
     }
 
+    listen() {
+      this.addPostRoute("/launch-plugin", "launch-plugin", false);
+      this.addPostRoute("/close-plugin", "close-plugin", false);
+      this.addGetRoute("microdrop/broker/running-plugins", this.onRunningPluginsUpdated.bind(this));
+      this.on("add-plugin", this.onAddPlugin.bind(this));
+      this.on("disconnect-plugin", this.onDisconnectPlugin.bind(this));
+      this.on("plugin-action", this.onCardAction.bind(this));
+    }
+
     get channel() {return "microdrop/plugin-manager"}
     get list() {return this._list;}
     set list(list) {
@@ -57,15 +66,6 @@
       styles.cardButton = {width: "60px", margin: "5px 3px"};
       styles.cardBadge = {padding: "5px", width: "80px", margin: "0 auto"};
       return styles;
-    }
-
-    listen() {
-      this.addPostRoute("/launch-plugin", "launch-plugin", false);
-      this.addPostRoute("/close-plugin", "close-plugin", false);
-      this.addRoute("microdrop/broker/running-plugins", this.onRunningPluginsUpdated.bind(this));
-      this.on("add-plugin", this.onAddPlugin.bind(this));
-      this.on("disconnect-plugin", this.onDisconnectPlugin.bind(this));
-      this.on("plugin-action", this.onCardAction.bind(this));
     }
 
     onAddPlugin(msg) {

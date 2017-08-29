@@ -3,7 +3,6 @@ class ProtocolController extends PluginController {
     super(elem, focusTracker, "ProtocolController");
     this.controls = this.Controls();
     this.data = new Array();
-    this.schemas = new Object();
     this.table = null;
     this.listen();
   }
@@ -11,14 +10,14 @@ class ProtocolController extends PluginController {
   // ** Listeners **
   listen() {
     // State Routes (Ties to Data Controllers used by plugin):
-    this.addRoute("microdrop/put/protocol-controller/state/steps", this.onStepsUpdated.bind(this));
-    this.addRoute("microdrop/put/protocol-controller/state/step-number", this.onStepNumberUpdated.bind(this));
+    this.addGetRoute("microdrop/put/protocol-controller/state/steps", this.onStepsUpdated.bind(this));
+    this.addGetRoute("microdrop/put/protocol-controller/state/step-number", this.onStepNumberUpdated.bind(this));
+    this.addGetRoute("microdrop/state/schema", this.onSchemaUpdated.bind(this));
 
     // Getters:
-    this.addRoute("{*}/dmf-device-ui-plugin/schema", this.onDmfDeviceUISchemaUpdated.bind(this));
-    this.addRoute("{*}/droplet-planning-plugin/schema", this.onDropletPlanningSchemaUpdated.bind(this));
-    this.addRoute("{*}/mqtt-plugin/protocol-state", this.onProtocolStateChanged.bind(this));
-    this.addRoute("{*}/mqtt-plugin/protocol-repeats-changed", this.onRepeatsChanged.bind(this));
+    // this.addRoute("microdrop/{plugin}/schema", this.onSchemaUpdated.bind(this));
+    this.addGetRoute("{*}/mqtt-plugin/protocol-state", this.onProtocolStateChanged.bind(this));
+    this.addGetRoute("{*}/mqtt-plugin/protocol-repeats-changed", this.onRepeatsChanged.bind(this));
 
     // Setters:
     this.addPostRoute("/update-step", "update");
@@ -98,7 +97,6 @@ class ProtocolController extends PluginController {
   }
 
   onProtocolChanged(payload) {
-    console.log("Protocol Changed!!");
     const protocol = JSON.parse(payload);
     const step_options = protocol.steps;
     this.updateSteps(step_options);
@@ -124,14 +122,9 @@ class ProtocolController extends PluginController {
     if (state == "paused")  this.controls.playbtn.innerText = "Play";
   }
 
-  onDropletPlanningSchemaUpdated(payload) {
-    const schema = JSON.parse(payload);
-    this.addSchema("droplet_planning_plugin", schema);
-  }
-
-  onDmfDeviceUISchemaUpdated(payload) {
-    const schema = JSON.parse(payload);
-    this.addSchema("dmf_device_ui_plugin", schema);
+  onSchemaUpdated(payload) {
+    const schemas = JSON.parse(payload);
+    this.schemas = schemas;
   }
 
   // ** Methods **
@@ -187,11 +180,6 @@ class ProtocolController extends PluginController {
     setTimeout(() => input_d.focus(), 100);
   }
 
-  addSchema(key,data){
-    this.schemas[key] = data;
-    this.table = this.Table();
-  }
-
   addStep() {
     const len = this.columns.length;
     const row = _.zipObject(this.columns, new Array(len).join(".").split("."));
@@ -224,6 +212,11 @@ class ProtocolController extends PluginController {
   }
 
   set step(number) {
+    if (!this.table) {
+      console.error("Attempted to set step, but table was undefined.");
+      return;
+    }
+
     const table_d = D(this.table.table().node());
     const rows    = D('tr', table_d);
     // If row undefined then add step
@@ -231,6 +224,7 @@ class ProtocolController extends PluginController {
       console.warn("Attempted to set step beyond table size, creating new step");
       this.addStep();
     }
+
     // Change selected step
     const row_d  = D(this.table.row(number).node());
     rows.forEach((i)=> D(i).setStyles(this.styles.unselected));
@@ -239,18 +233,21 @@ class ProtocolController extends PluginController {
 
   get columns() {
     const schema = this.schema;
-    return _.concat(["step"], _.keys(schema));
+    return _.keys(schema);
   }
 
   get headers() {
     const schema = this.schema;
     const headers = _.map(schema, this.createDatatablesHeader);
-    const stepHeader = this.createDatatablesHeader(null, "step");
     // XXX: Manually placing step column at first index (so that the table
     //      sorts by the this column by default):
-    return _.concat([stepHeader], headers);
+    return headers;
   }
-
+  get schemas() {return this._schemas}
+  set schemas(schemas) {
+    this._schemas = schemas;
+    this.table = this.Table();
+  }
   get schema() {
     // Get total schema (from all schemas)
     const schema = new Object();
@@ -265,6 +262,11 @@ class ProtocolController extends PluginController {
 
   // ** Updaters **
   updateSteps(step_options){
+    if (!this.table) {
+      console.error("Attemted to update steps, but table was undefined");
+      return;
+    }
+
     const step_count = step_options.length;
     const data_count = this.data.length;
 
@@ -280,9 +282,8 @@ class ProtocolController extends PluginController {
     _.each(step_options, (step,i) => {
       if (!this.data[i]) this.data[i] = new Object();
       const options = _.assign.apply(_, _.values(step));
-      _.each(options, (v,k) => this.data[i][k] = v);
-      const data = _.extend({step: i}, this.data[i]);
-      this.data[i] = data;
+      _.each(options, (v,k) => { this.data[i][k] = v });
+      const x = _.cloneDeep(this.data);
     });
 
     // Update step with new step options
@@ -333,10 +334,18 @@ class ProtocolController extends PluginController {
     return controls;
   }
 
-  Table() {
-    let columns;
+  DefaultRow() {
+    const row = _.zipObject(this.columns, _.map(this.columns, (c) => {
+      if (!this.schema[c]) return 0;
+      if (!this.schema[c].default) return 0;
+      return this.schema[c].default;
+    }));
+    return row;
+  }
 
+  Table() {
     // remove, and recreate table
+    // TODO: Destruct should be part of setter (when input is undefined)
     if (this.table) {
       const node = this.table.table().node();
       this.table.destroy();
@@ -344,10 +353,12 @@ class ProtocolController extends PluginController {
     }
 
     // Create dom element to house datatable
-    const elem = D("<table></table>");
-    elem.setStyles({"font-size": "13px"});
-    elem.addClasses("cell-border compact hover");
-    elem.on("mousedown", event => this.trigger("mousedown", event));
+    const tableAsDomArray = D("<table></table>");
+    const tableAsJquery   = $(tableAsDomArray.el);
+
+    tableAsDomArray.setStyles({"font-size": "13px"});
+    tableAsDomArray.addClasses("cell-border compact hover");
+    tableAsDomArray.on("mousedown", event => this.trigger("mousedown", event));
 
     // Display options for datatable:
     const options = new Object();
@@ -358,10 +369,12 @@ class ProtocolController extends PluginController {
     options.paginate = false;
 
     // Initialize datatable
-    const table_jq = $(elem[0]);
-    table_jq.appendTo(this.element);
+    this.element.append(tableAsDomArray.el);
+    const dataTable = tableAsJquery.DataTable(options);
 
-    return table_jq.DataTable(options);
+    // Add empty row with default data:
+    dataTable.row.add(this.DefaultRow()).draw();
+    return dataTable
   }
 
 }
