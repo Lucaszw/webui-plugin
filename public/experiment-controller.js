@@ -8,9 +8,8 @@ class ExperimentController extends PluginController {
   // ** Event Listeners **
   listen() {
     // State Routes (Ties to Data Controllers used by plugin):
-    this.addGetRoute("microdrop/put/experiment-controller/state/protocol", this.onProtocolUpdated.bind(this));
-
-    this.addGetRoute("microdrop/data-controller/protocols", this.onGetProtocols.bind(this));
+    this.addGetRoute("microdrop/put/experiment-controller/state/protocol-skeleton", this.onProtocolUpdated.bind(this));
+    this.addGetRoute("microdrop/data-controller/protocol-skeletons", this.onGetProtocols.bind(this));
     this.addGetRoute("microdrop/data-controller/send-protocol", this.onReceivedProtocol.bind(this));
 
     this.addPostRoute("/save-protocol", "save");
@@ -52,7 +51,7 @@ class ExperimentController extends PluginController {
   set protocols(protocols) {
     this._protocols = protocols;
     if (!this.protocol)
-      this.trigger("change-protocol", _.last(this._protocols.name));
+      this.trigger("change-protocol", _.last(this._protocols).name);
     this.list = this.List(this._protocols);
   }
 
@@ -122,6 +121,8 @@ class ExperimentController extends PluginController {
     this.trigger("upload-protocol", protocol);
   }
   onGetProtocols(msg) {
+    console.log("Getting protocols...");
+    console.log(JSON.parse(msg));
     this.protocols = JSON.parse(msg);
   }
   onItemClicked(protocol) {

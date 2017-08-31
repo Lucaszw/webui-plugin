@@ -1,8 +1,6 @@
 class UIController extends MQTTClient {
   constructor(deviceView) {
     super("UIController");
-    this.listen();
-
     // TODO Bridge over DeviceUI into its own PluginController / MQTTClient
     this.deviceView = deviceView;
     this.device_ui_plugin = new DeviceUIPlugin(this.deviceView);
@@ -10,7 +8,7 @@ class UIController extends MQTTClient {
     this.device_ui_plugin.listen(this.device_ui_client.client);
 
     this.electrode_states = null;
-
+    this.listen();
     this.render();
   }
 

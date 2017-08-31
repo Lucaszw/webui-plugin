@@ -3,21 +3,18 @@ class ProtocolController extends PluginController {
     super(elem, focusTracker, "ProtocolController");
     this.controls = this.Controls();
     this.data = new Array();
-    this.table = null;
+    this.initialSteps = null;
     this.listen();
   }
 
   // ** Listeners **
   listen() {
+    console.log("adding listeners....");
+
     // State Routes (Ties to Data Controllers used by plugin):
     this.addGetRoute("microdrop/put/protocol-controller/state/steps", this.onStepsUpdated.bind(this));
     this.addGetRoute("microdrop/put/protocol-controller/state/step-number", this.onStepNumberUpdated.bind(this));
     this.addGetRoute("microdrop/state/schema", this.onSchemaUpdated.bind(this));
-
-    // Getters:
-    // this.addRoute("microdrop/{plugin}/schema", this.onSchemaUpdated.bind(this));
-    this.addGetRoute("{*}/mqtt-plugin/protocol-state", this.onProtocolStateChanged.bind(this));
-    this.addGetRoute("{*}/mqtt-plugin/protocol-repeats-changed", this.onRepeatsChanged.bind(this));
 
     // Setters:
     this.addPostRoute("/update-step", "update");
@@ -108,6 +105,8 @@ class ProtocolController extends PluginController {
 
   onStepsUpdated(payload) {
     const steps = JSON.parse(payload);
+    console.log("!!!STEPS::::");
+    console.log(steps);
     this.updateSteps(steps);
   }
 
@@ -123,6 +122,8 @@ class ProtocolController extends PluginController {
   }
 
   onSchemaUpdated(payload) {
+    console.log("Updating Schema:::");
+    console.log(payload);
     const schemas = JSON.parse(payload);
     this.schemas = schemas;
   }
@@ -247,6 +248,12 @@ class ProtocolController extends PluginController {
   set schemas(schemas) {
     this._schemas = schemas;
     this.table = this.Table();
+    if (this.initialSteps){
+      // XXX: Should not require hot fix, (steps should be maintained
+      //      w/ own getter/setter)
+      this.updateSteps(this.initialSteps);
+      delete this.initialSteps;
+    }
   }
   get schema() {
     // Get total schema (from all schemas)
@@ -264,6 +271,8 @@ class ProtocolController extends PluginController {
   updateSteps(step_options){
     if (!this.table) {
       console.error("Attemted to update steps, but table was undefined");
+      // XXX: Current hot depending on whether schema or steps loaded first
+      this.initialSteps = step_options;
       return;
     }
 

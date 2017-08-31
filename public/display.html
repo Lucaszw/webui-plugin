@@ -3,22 +3,24 @@
 <html>
 <head>
   <meta http-equiv="content-type" content="text/html; charset=UTF-8">
-  <link href="//cdnjs.cloudflare.com/ajax/libs/datatables/1.10.15/css/jquery.dataTables.min.css" rel="stylesheet" />
+  <link href="static/bootstrap.min.css" rel="stylesheet" />
+  <link href="static/jquery.dataTables.min.css" rel="stylesheet" />
   <link rel="stylesheet" type="text/css" media="screen" href="property-table.css" />
   <link rel="stylesheet" type="text/css" media="screen" href="phosphor-menus.css" />
   <link rel="stylesheet" type="text/css" media="screen" href="formatPlane.css" />
   <link rel="stylesheet" type="text/css" media="screen" href="index.css" />
   <script type="text/javascript" src="two.min.js"></script>
   <script type="text/javascript" src="libDeviceUIPlugin.js"></script>
-  <script src="//cdnjs.cloudflare.com/ajax/libs/datatables/1.10.15/js/jquery.dataTables.min.js"></script>
-  <script src="//cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js" type="text/javascript"></script>
-  <script src="//cdnjs.cloudflare.com/ajax/libs/js-signals/1.0.0/js-signals.min.js" type="text/javascript"></script>
-  <script src="//cdnjs.cloudflare.com/ajax/libs/crossroads/0.12.2/crossroads.min.js" type="text/javascript"></script>
+  <script type="text/javascript" src="static/jquery.dataTables.min.js"></script>
+  <script type="text/javascript" src="static/mqttws31.min.js"></script>
+  <script type="text/javascript" src="static/js-signals.min.js"></script>
+  <script type="text/javascript" src="static/crossroads.min.js"></script>
   <script type="text/javascript" src="main.js"></script>
   <script type="text/javascript" src="mqtt-client.js"></script>
   <script type="text/javascript" src="plugin-controller.js"></script>
   <script type="text/javascript" src="experiment-controller.js"></script>
   <script type="text/javascript" src="protocol-controller.js"></script>
+  <script type="text/javascript" src="device-loader.js"></script>
   <script type="text/javascript" src="ui-controller.js"></script>
 
   <!--Include PhosphorJS bundle-->
@@ -39,47 +41,151 @@
   // Disable alert messages in datatables:
   $.fn.dataTable.ext.errMode = 'throw';
 
-
-  class DeviceLoader extends PluginController {
-    constructor(elem, focusTracker) {
-      super(elem, focusTracker, "DeviceLoader");
-      this.controls = this.Controls();
+  class DummyPlugin extends MQTTClient {
+    constructor() {
+      super("DummyPlugin");
       this.listen();
     }
     listen() {
-      this.addPostRoute("/load-device", "send-file", false);
-      this.on("open-file-upload", this.onOpenFileUpload.bind(this));
-      this.on("load-file", this.onLoadFile.bind(this));
+      this.addGetRoute("microdrop/{*}/run-step", this.onRunStep.bind(this));
+      this.addGetRoute("microdrop/{*}/find-executable-plugins", this.onFindExecutablePlugins.bind(this));
+      this.addPostRoute("/executable-plugin-found", "executable-plugin-found");
+      this.addPostRoute("/step-complete", "step-complete");
     }
+    get channel() {return "microdrop/dummy-plugin"}
+    onFindExecutablePlugins(payload) {
+      this.trigger("executable-plugin-found", null);
+    }
+    onRunStep(payload) {
+      setTimeout(()=>this.trigger("step-complete", null), 100000);
+    }
+  }
+  class ProtocolExecutionUI extends PluginController {
+    constructor(element, focusTracker) {
+      super(element, focusTracker, "ProtocolExecutionUI");
+      this.executablePlugins = new Backbone.Model();
+      this.maxWaitTime = 10000;
+      this.running = false;
+      this.stepNumber = null;
+      this.steps = null;
+      this.controls = this.Controls();
+      this.listen();
+    }
+    // ** Event Listeners **
+    listen() {
+      this.on("change-max-wait-time", this.onChangeMaxWaitTime.bind(this));
+      this.on("reached-max-wait-time", this.onReachedMaxWaitTime.bind(this));
+      this.on("refresh-executable-plugins", this.onRefreshExecutablePlugins.bind(this));
+      this.on("run-experiment", this.onRunExperiment.bind(this));
+      this.executablePlugins.on("all", this.onExecutablePluginsUpdated.bind(this));
+
+      this.addGetRoute("microdrop/put/protocol-controller/state/steps", this.onStepsUpdated.bind(this));
+      this.addGetRoute("microdrop/put/protocol-controller/state/step-number", this.onStepNumberUpdated.bind(this));
+      this.addGetRoute("microdrop/{pluginName}/executable-plugin-found", this.onExecutablePluginFound.bind(this));
+      this.addGetRoute("microdrop/{pluginName}/step-complete", this.onStepComplete.bind(this));
+
+      this.addPostRoute("/find-executable-plugins", "find-executable-plugins");
+      this.addPostRoute("/update-step-number", "update-step-number");
+      this.addPostRoute("/run-step", "run-step");
+    }
+    // ** Getters and Setters **
+    get channel() {return  "microdrop/protocol-execution-ui"};
     get controls() {return this._controls}
     set controls(controls) {
-      if (controls == undefined) this.element.removeChild(this.controls.el);
-      if (controls != undefined) this.element.appendChild(controls.el);
+      if (this.controls) this.element.removeChild(this.controls);
+      if (controls) this.element.appendChild(controls);
       this._controls = controls;
     }
-    onLoadFile(file) {
-      const reader = new FileReader();
-      reader.onload = () => this.trigger("send-file", this.File(file,reader));
-      reader.readAsText(file);
+    get list() {return this._list}
+    set list(list) {
+      if (this.list) this.element.removeChild(this.list);
+      if (list) this.element.appendChild(list);
+      this._list = list;
     }
-    onOpenFileUpload() {
-      const input = D("<input type='file'/>");
-      input.on("change", (e)=> this.trigger("load-file", input.el.files[0]));
-      input.click();
+    // ** Methods **
+    changeStep() {
+      if (this.stepNumber == this.steps.length-1) {
+        this.trigger("refresh-executable-plugins", null);
+        return;
+      }
+      this.trigger("update-step-number", this.stepNumber+1);
     }
-
-    File(file, reader) {
-      return {name: file.name, file: reader.result};
+    // ** Event Handlers **
+    onExecutablePluginFound(payload, pluginName) {
+      if (this.executablePlugins.has(pluginName)) return;
+      this.executablePlugins.set(pluginName, this.stepNumber || 0);
     }
+    onExecutablePluginsUpdated(eventName){
+      const plugins = Object.entries(this.executablePlugins.attributes)
+      this.list = this.List(plugins);
+    }
+    onChangeMaxWaitTime(value) {this.maxWaitTime = value}
+    onReachedMaxWaitTime(step) {
+      // Check if any plugins still on this step:
+      const plugins = Object.entries(this.executablePlugins.attributes);
+      const deadPlugins = plugins.filter(([,s])=>s==step);
+      for (const [pluginName,] of deadPlugins){
+        console.error(`Max time reached for plugin: ${pluginName}`);
+        this.executablePlugins.unset(pluginName);
+        this.trigger("update-step-number", step+1);
+      }
+    }
+    onStepComplete(payload, pluginName) {
+      this.executablePlugins.set(pluginName, this.stepNumber+1);
+      const stepCompleted = !this.executablePlugins.values().includes(this.stepNumber);
+      // console.log(`Step number ${this.stepNumber} complete!`);
+      // Ensure that all plugins have completed before progressing:
+      if (stepCompleted) this.changeStep();
+    }
+    onStepsUpdated(payload) {
+      this.steps = JSON.parse(payload);
+    }
+    onStepNumberUpdated(payload) {
+      this.stepNumber = JSON.parse(payload);
+      this.executablePlugins.trigger("change");
+      if (this.running) {
+        this.trigger("run-step", this.steps[this.stepNumber]);
+        const step = this.stepNumber;
+        setTimeout(()=>{this.trigger("reached-max-wait-time", step)}, this.maxWaitTime);
+      }
+      if (!this.running) this.trigger("refresh-executable-plugins", null);
+    }
+    onRefreshExecutablePlugins() {
+      this.running = false;
+      this.executablePlugins.clear();
+      this.trigger("find-executable-plugins", null);
+    }
+    onRunExperiment() {
+      this.running = true;
+      this.trigger("update-step-number", this.stepNumber || 0);
+    }
+    // ** Initializers **
     Controls() {
-      // Textfield:
-      const uploadTextfield = D("<input type='text' disabled />");
-      const uploadButton = D("<button>Upload</button>");
-      const container = D("<div></div");
-      uploadButton.on("click", () => this.trigger("open-file-upload"));
-      container.appendChild(uploadTextfield.el);
-      container.appendChild(uploadButton.el);
-      return container;
+      const controls = D("<div></div>");
+      const getExecutablePluginsButton = D("<button>Get Executable Plugins</button>");
+      const runExperimentButton = D("<button>Run Experiment</button>");
+      const maxWaitTimeField = D(`<input type='number' value='${this.maxWaitTime}' />`);
+
+      getExecutablePluginsButton.on("click", () => this.trigger("refresh-executable-plugins"));
+      runExperimentButton.on("click", () => this.trigger("run-experiment"));
+      maxWaitTimeField.on("click", () => {this.trigger("change-max-wait-time", maxWaitTimeField.value)});
+
+      controls.appendChild(getExecutablePluginsButton.el);
+      controls.appendChild(runExperimentButton.el);
+      controls.appendChild(maxWaitTimeField.el);
+      return controls.el;
+    }
+    List(plugins) {
+      const list = D("<ul class='list-group'></ul>");
+      for (const [pluginName, step] of plugins) {
+        const item = D(`<i class='list-group-item'>${pluginName} ${step}</i>`);
+        list.appendChild(item.el);
+        if (step == this.stepNumber) item.setStyles({background: "#fff4bc"});
+        if (step != this.stepNumber) item.setStyles({background: "#c3f7b2"});
+
+        if (!this.running) item.setStyles({background: "white"});
+      }
+      return list.el;
     }
   }
 
@@ -115,17 +221,20 @@
     widgets.experimentView.title.text = "Experiments";
     widgets.deviceLoader = new PhosphorWidget.Widget();
     widgets.deviceLoader.title.text = "Device Loader";
+    widgets.protocolExecution = new PhosphorWidget.Widget();
+    widgets.protocolExecution.title.text = "Protocol Execution";
 
     panel = new DockPanel();
     panel.id = 'main';
     panel.insertLeft(widgets.three);
 
-    panel.insertBottom(widgets.deviceLoader, widgets.three);
+    panel.insertBottom(widgets.protocolTable, widgets.three);
+    panel.insertTabAfter(widgets.deviceLoader, widgets.protocolTable);
     panel.insertTabAfter(widgets.electrode, widgets.deviceLoader);
     panel.insertTabAfter(widgets.plot, widgets.deviceLoader);
     panel.insertTabAfter(widgets.dat, widgets.plot);
     panel.insertRight(widgets.experimentView);
-    panel.insertBottom(widgets.protocolTable, widgets.experimentView);
+    panel.insertBottom(widgets.protocolExecution, widgets.experimentView);
     panel.attach(document.body);
 
     window.onresize = () => {panel.update()};
@@ -139,7 +248,10 @@
     window.experimentController = new ExperimentController(widgets.experimentView.node, focusTracker);
     window.protocolcontroller   = new ProtocolController(widgets.protocolTable.node, focusTracker);
     window.deviceLoader = new DeviceLoader(widgets.deviceLoader.node, focusTracker);
+    window.protocolExecution = new ProtocolExecutionUI(widgets.protocolExecution.node, focusTracker);
     window.uicontroller = new UIController(deviceView);
+
+    window.dummyPlugin = new DummyPlugin();
   }
 
   $(window).on("load", load);

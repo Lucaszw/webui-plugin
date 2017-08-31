@@ -3,10 +3,6 @@ const IsJsonString = (str) => {
   return true;
 }
 
-String.prototype.replaceAll = function(str1, str2, ignore){
-  return this.replace(new RegExp(str1.replace(/([\/\,\!\\\^\$\{\}\[\]\(\)\.\*\+\?\|\<\>\-\&])/g,"\\$&"),(ignore?"gi":"g")),(typeof(str2)=="string")?str2.replace(/\$/g,"$$$$"):str2);
-}
-
 class MQTTClient {
   constructor(name="web-ui") {
     _.extend(this, Backbone.Events);
@@ -20,8 +16,9 @@ class MQTTClient {
   }
 
   addGetRoute(topic, method) {
-    this.subscriptions.push(topic.replaceAll("{*}", "#"));
+    // Replace content within curly brackets with "+" wildcard
     this.addRoute(topic, method);
+    this.subscriptions.push(topic.replace(/\{(.+?)\}/g, "+"));
   }
 
   addPostRoute(topic, event, retain=false, qos=0, dup=false){
@@ -47,21 +44,24 @@ class MQTTClient {
   // ** Event Handlers **
   onConnect() {
     // MQTT Callback after establishing brocker connection
-    _.each(this.subscriptions, (str) => {this.client.subscribe(str)});
+    console.log(`Subscriptions for ${this.name}:::`);
+    console.log(this.subscriptions);
+    for (var s of this.subscriptions) this.client.subscribe(s);
   }
 
   onMessageArrived(msg) {
     const receiver = this.name + " : " + msg.destinationName;
+    console.log(receiver);
+
     const payloadIsValid = IsJsonString(msg.payloadString);
 
-    // console.log(receiver);
     if (payloadIsValid)  this.parse(msg.destinationName, [msg.payloadString]);
     if (!payloadIsValid) console.error("Could not parse message for " + receiver);
   }
 
   // ** Initializers **
   Client() {
-    const client = new Paho.MQTT.Client("localhost", 8083, name);
+    const client = new Paho.MQTT.Client("localhost", 8083, this.name);
     client.onMessageArrived = this.onMessageArrived.bind(this);
     client.connect({onSuccess: this.onConnect.bind(this)});
     return client;
