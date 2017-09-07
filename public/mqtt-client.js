@@ -28,10 +28,19 @@ class MQTTClient {
   }
 
   sendMessage(topic, payload, retain=false, qos=0, dup=false){
+    if (this.client.isConnected() == false){
+      console.error("Cannot send message, client is disconnected");
+      return;
+    }
     const message = this.Message(topic,payload,retain,qos,dup);
     this.client.send(message);
   }
-
+  reconnect() {
+    if (this.client.isConnected()) return;
+    console.warn("Connection lost with broker, attempting to reconnect");
+    this.client.connect({onSuccess: this.onConnect.bind(this)});
+    setTimeout(()=>{this.reconnect()}, 1000);
+  }
   // ** Getters and Setters **
   get name() {
     return this.constructor.name;
@@ -40,7 +49,6 @@ class MQTTClient {
   get channel() {
     return  "microdrop/dmf-device-ui";
   }
-
   // ** Event Handlers **
   onConnect() {
     // MQTT Callback after establishing brocker connection
@@ -48,10 +56,12 @@ class MQTTClient {
     console.log(this.subscriptions);
     for (var s of this.subscriptions) this.client.subscribe(s);
   }
-
+  onConnectionLost() {
+    this.reconnect();
+  }
   onMessageArrived(msg) {
     const receiver = this.name + " : " + msg.destinationName;
-    console.log(receiver);
+    // console.log(receiver);
 
     const payloadIsValid = IsJsonString(msg.payloadString);
 
@@ -63,6 +73,7 @@ class MQTTClient {
   Client() {
     const client = new Paho.MQTT.Client("localhost", 8083, this.name);
     client.onMessageArrived = this.onMessageArrived.bind(this);
+    client.onConnectionLost = this.onConnectionLost.bind(this);
     client.connect({onSuccess: this.onConnect.bind(this)});
     return client;
   }
